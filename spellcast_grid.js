@@ -1,56 +1,72 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, PanResponder, Animated, TouchableOpacity, Alert } from 'react-native';
-import { styles } from 'C:/Users/Wisam/SpellCast/styles.js';
-import { 
-  GRID_SIZE, 
-  GAME_DURATION, 
-  HITBOX_SCALE, 
-  wordList 
-} from 'C:/Users/Wisam/SpellCast/game_constants.js';
-import { 
-  generateTestGrid, 
-  calculateScore, 
-  formatTime, 
-  isAdjacent, 
-  isAlreadySelected 
-} from 'C:/Users/Wisam/SpellCast/game_utils.js';
-import StarField from 'C:/Users/Wisam/SpellCast/starfield_component.js'; // Import the reusable StarField component
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, Animated, TouchableOpacity, Alert } from 'react-native';
+import { styles } from './styles.js';
+import {
+  GRID_SIZE,
+  GAME_DURATION,
+  MIN_WORD_LENGTH,
+  isValidWord,
+} from './game_constants.js';
+import {
+  generateTestGrid,
+  calculateScore,
+  formatTime,
+} from './game_utils.js';
+import StarField from './starfield_component.js'; // Import the reusable StarField component
+import { useSwipeSelection } from './swipe_selection.js';
+import SwipePath from './swipe_path.js';
 
 const SpellcastGrid = ({ goToMenu }) => {
   // State management
   const [gridData, setGridData] = useState(generateTestGrid());
-  const [selectedCells, setSelectedCells] = useState([]);
-  const [trail, setTrail] = useState([]);
   const [savedWords, setSavedWords] = useState([]);
   const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
   const [gameActive, setGameActive] = useState(false);
   const [gameStarted, setGameStarted] = useState(false);
   const [score, setScore] = useState(0);
   const [multiplierCell, setMultiplierCell] = useState(null); // New state for 2x cell
-  
-  // Refs
-  const fadeAnims = useRef(gridData.map(row => row.map(() => new Animated.Value(1)))).current;
-  const scaleAnims = useRef(gridData.map(row => row.map(() => new Animated.Value(1)))).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const gridLayout = useRef({ x: 0, y: 0, width: 0, height: 0 });
-  const selectedCellsRef = useRef([]);
-  const timerRef = useRef(null);
+  const [feedback, setFeedback] = useState(null); // { text, tone }
 
-  // Update ref when selectedCells changes
+  // Refs
+  const scaleAnims = useRef(
+    Array.from({ length: GRID_SIZE }, () =>
+      Array.from({ length: GRID_SIZE }, () => new Animated.Value(1)),
+    ),
+  ).current;
+  const popAnims = useRef(
+    Array.from({ length: GRID_SIZE }, () =>
+      Array.from({ length: GRID_SIZE }, () => new Animated.Value(1)),
+    ),
+  ).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const gridDataRef = useRef(gridData);
+  const timerRef = useRef(null);
+  const feedbackTimerRef = useRef(null);
+
   useEffect(() => {
-    selectedCellsRef.current = selectedCells;
-  }, [selectedCells]);
+    gridDataRef.current = gridData;
+  }, [gridData]);
+
+  const flashFeedback = (text, tone = 'error') => {
+    setFeedback({ text, tone });
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = setTimeout(() => setFeedback(null), 1300);
+  };
+
+  useEffect(() => () => {
+    if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+  }, []);
+
+  // Check if a cell is the multiplier cell
+  const isMultiplierCell = (row, col) =>
+    !!multiplierCell && multiplierCell.row === row && multiplierCell.col === col;
 
   // Generate random multiplier cell
   const generateMultiplierCell = () => {
-    const row = Math.floor(Math.random() * GRID_SIZE);
-    const col = Math.floor(Math.random() * GRID_SIZE);
-    setMultiplierCell({ row, col });
-  };
-
-  // Check if a cell is the multiplier cell
-  const isMultiplierCell = (row, col) => {
-    return multiplierCell && multiplierCell.row === row && multiplierCell.col === col;
+    setMultiplierCell({
+      row: Math.floor(Math.random() * GRID_SIZE),
+      col: Math.floor(Math.random() * GRID_SIZE),
+    });
   };
 
   // Calculate score with multiplier
@@ -58,6 +74,115 @@ const SpellcastGrid = ({ goToMenu }) => {
     const baseScore = calculateScore(word);
     return usedMultiplier ? baseScore * 2 : baseScore;
   };
+
+  /* ------------------------------------------------------------- swipe -- */
+
+  // Called once, when the finger lifts, with the cells that were traced.
+  const handleWordSubmitted = (cells) => {
+    const grid = gridDataRef.current;
+    const word = cells
+      .map(({ row, col }) => grid[row]?.[col] ?? '')
+      .join('')
+      .toUpperCase();
+
+    if (word.length < MIN_WORD_LENGTH) {
+      if (word.length > 1) flashFeedback(`${MIN_WORD_LENGTH} letters minimum`);
+      return;
+    }
+    if (savedWords.includes(word)) {
+      flashFeedback(`${word} already found`);
+      return;
+    }
+    if (!isValidWord(word)) {
+      flashFeedback(`${word} isn't in the dictionary`);
+      return;
+    }
+
+    const usedMultiplier = cells.some(({ row, col }) => isMultiplierCell(row, col));
+    const wordScore = calculateScoreWithMultiplier(word, usedMultiplier);
+
+    setSavedWords((previous) => [...previous, word]);
+    setScore((previous) => previous + wordScore);
+    flashFeedback(`${word}  +${wordScore}${usedMultiplier ? '  2X!' : ''}`, 'success');
+
+    // Celebration pop on the letters that made the word.
+    cells.forEach(({ row, col }) => {
+      Animated.sequence([
+        Animated.timing(popAnims[row][col], {
+          toValue: isMultiplierCell(row, col) ? 1.45 : 1.28,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.spring(popAnims[row][col], {
+          toValue: 1,
+          friction: 4,
+          tension: 90,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+
+    if (usedMultiplier) {
+      setTimeout(generateMultiplierCell, 400);
+    }
+  };
+
+  const {
+    panHandlers,
+    path,
+    clearSelection,
+    gridRef,
+    onGridLayout,
+    onCellLayout,
+    getCellCenter,
+    subscribeToLivePoint,
+    geometryVersion,
+  } = useSwipeSelection({
+    enabled: gameActive,
+    onCommit: handleWordSubmitted,
+  });
+
+  // Animate tiles as they join / leave the current selection.
+  const previousPathRef = useRef([]);
+  useEffect(() => {
+    const key = (cell) => `${cell.row},${cell.col}`;
+    const previousKeys = new Set(previousPathRef.current.map(key));
+    const currentKeys = new Set(path.map(key));
+
+    const animate = ({ row, col }, toValue, duration) => {
+      Animated.timing(scaleAnims[row][col], {
+        toValue,
+        duration,
+        useNativeDriver: true,
+      }).start();
+    };
+
+    path.forEach((cell) => {
+      if (!previousKeys.has(key(cell))) animate(cell, 1.12, 90);
+    });
+    previousPathRef.current.forEach((cell) => {
+      if (!currentKeys.has(key(cell))) animate(cell, 1, 140);
+    });
+
+    previousPathRef.current = path;
+  }, [path, scaleAnims]);
+
+  // Never leave a half-drawn word behind when play stops.
+  useEffect(() => {
+    if (!gameActive) clearSelection();
+  }, [gameActive, clearSelection]);
+
+  const currentWord = useMemo(
+    () => path.map(({ row, col }) => gridData[row]?.[col] ?? '').join(''),
+    [path, gridData],
+  );
+  const currentWordIsValid =
+    isValidWord(currentWord) && !savedWords.includes(currentWord.toUpperCase());
+  const currentWordUsesMultiplier = path.some(({ row, col }) =>
+    isMultiplierCell(row, col),
+  );
+
+  /* -------------------------------------------------------------- game -- */
 
   // Pulse animation for timer warning
   useEffect(() => {
@@ -74,7 +199,7 @@ const SpellcastGrid = ({ goToMenu }) => {
             duration: 500,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       );
       pulse.start();
       return () => pulse.stop();
@@ -85,7 +210,7 @@ const SpellcastGrid = ({ goToMenu }) => {
   useEffect(() => {
     if (gameActive && timeLeft > 0) {
       timerRef.current = setTimeout(() => {
-        setTimeLeft(prev => prev - 1);
+        setTimeLeft((previous) => previous - 1);
       }, 1000);
     } else if (timeLeft === 0 && gameActive) {
       endGame();
@@ -104,6 +229,7 @@ const SpellcastGrid = ({ goToMenu }) => {
     setTimeLeft(GAME_DURATION);
     setSavedWords([]);
     setScore(0);
+    setFeedback(null);
     shuffleGrid();
     generateMultiplierCell(); // Generate initial multiplier cell
   };
@@ -133,169 +259,20 @@ const SpellcastGrid = ({ goToMenu }) => {
   };
 
   const shuffleGrid = () => {
-    const newGrid = generateTestGrid();
-    setGridData(newGrid);
-    setSelectedCells([]);
-    
-    newGrid.forEach((row, rowIndex) => {
-      row.forEach((_, colIndex) => {
-        fadeAnims[rowIndex][colIndex].setValue(1);
-        scaleAnims[rowIndex][colIndex].setValue(1);
-      });
-    });
-    
+    clearSelection();
+    setGridData(generateTestGrid());
+
+    for (let row = 0; row < GRID_SIZE; row++) {
+      for (let col = 0; col < GRID_SIZE; col++) {
+        scaleAnims[row][col].setValue(1);
+        popAnims[row][col].setValue(1);
+      }
+    }
+
     // Generate new multiplier cell after shuffle
     if (gameActive) {
       generateMultiplierCell();
     }
-  };
-
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => gameActive,
-    onMoveShouldSetPanResponder: () => gameActive,
-    
-    onPanResponderGrant: (event, gestureState) => {
-      if (gameActive) {
-        handleSelection(gestureState.x0, gestureState.y0, true);
-      }
-    },
-    
-    onPanResponderMove: (event, gestureState) => {
-      if (gameActive) {
-        handleSelection(gestureState.moveX, gestureState.moveY, false);
-        
-        const { moveX, moveY } = gestureState;
-        const newTrailPoint = {
-          id: Date.now(),
-          x: moveX,
-          y: moveY,
-          opacity: new Animated.Value(1),
-          scale: new Animated.Value(1),
-        };
-        
-        // Enhanced trail animation
-        Animated.parallel([
-          Animated.timing(newTrailPoint.opacity, {
-            toValue: 0,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(newTrailPoint.scale, {
-            toValue: 0,
-            duration: 800,
-            useNativeDriver: true,
-          })
-        ]).start(() => {
-          setTrail(prev => prev.filter(p => p.id !== newTrailPoint.id));
-        });
-        
-        setTrail(prev => [...prev, newTrailPoint]);
-      }
-    },
-    
-    onPanResponderRelease: () => {
-      if (gameActive) {
-        const currentWord = selectedCellsRef.current.map(cell => cell.letter).join('');
-        if (currentWord.length >= 3 && wordList.includes(currentWord.toUpperCase()) && !savedWords.includes(currentWord.toUpperCase())) {
-          // Check if word uses multiplier cell
-          const usedMultiplier = selectedCells.some(cell => 
-            isMultiplierCell(cell.row, cell.col)
-          );
-          
-          const wordScore = calculateScoreWithMultiplier(currentWord, usedMultiplier);
-          setSavedWords(prev => [...prev, currentWord.toUpperCase()]);
-          setScore(prev => prev + wordScore);
-          
-          console.log(`Valid word found: ${currentWord} (${wordScore} points)${usedMultiplier ? ' - 2X MULTIPLIER!' : ''}`);
-          
-          // Success animation
-          selectedCells.forEach(({ row, col }) => {
-            const isMultiplier = isMultiplierCell(row, col);
-            Animated.sequence([
-              Animated.timing(scaleAnims[row][col], {
-                toValue: isMultiplier ? 1.5 : 1.3, // Bigger animation for multiplier
-                duration: 200,
-                useNativeDriver: true,
-              }),
-              Animated.timing(scaleAnims[row][col], {
-                toValue: 1,
-                duration: 200,
-                useNativeDriver: true,
-              })
-            ]).start();
-          });
-          
-          // If multiplier was used, generate new one
-          if (usedMultiplier) {
-            setTimeout(() => {
-              generateMultiplierCell();
-            }, 500);
-          }
-        }
-        
-        resetAnimations();
-      }
-    },
-  });
-
-  const handleSelection = (x, y, isFirst) => {
-    const { y: gridY, width } = gridLayout.current;
-    const gridX = gridLayout.current.x;
-    const cellSize = width / GRID_SIZE;
-    
-    // Calculate center of each cell
-    for (let row = 0; row < GRID_SIZE; row++) {
-      for (let col = 0; col < GRID_SIZE; col++) {
-        const centerX = gridX + col * cellSize + cellSize / 2;
-        const centerY = gridY + 370 + row * cellSize + cellSize / 2;
-        
-        // Distance from touch to cell center
-        const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-        
-        // Only register if within hitbox radius
-        if (distance < cellSize * HITBOX_SCALE / 2) {
-          const newCell = { row, col, letter: gridData[row][col] };
-          const lastCell = selectedCells[selectedCells.length - 1];
-          
-          if (isFirst || (isAdjacent(lastCell, newCell) && !isAlreadySelected(newCell, selectedCells))) {
-            setSelectedCells(prev => [...prev, newCell]);
-            
-            // Enhanced selection animation
-            Animated.parallel([
-              Animated.timing(fadeAnims[row][col], {
-                toValue: 0.3,
-                duration: 100,
-                useNativeDriver: true,
-              }),
-              Animated.timing(scaleAnims[row][col], {
-                toValue: 1.1,
-                duration: 100,
-                useNativeDriver: true,
-              })
-            ]).start();
-            return;
-          }
-        }
-      }
-    }
-  };
-
-  const resetAnimations = () => {
-    selectedCells.forEach(({ row, col }) => {
-      Animated.parallel([
-        Animated.timing(fadeAnims[row][col], {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnims[row][col], {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        })
-      ]).start();
-    });
-    setSelectedCells([]);
   };
 
   // Show start screen if game hasn't started
@@ -312,17 +289,17 @@ const SpellcastGrid = ({ goToMenu }) => {
           <Text style={styles.startDescription}>
             Swipe to connect letters • 60 seconds • Look for 2X multiplier cells! 🔥
           </Text>
-          
-          <TouchableOpacity 
-            onPress={startGame} 
+
+          <TouchableOpacity
+            onPress={startGame}
             style={styles.modernStartButton}
             activeOpacity={0.8}
           >
             <Text style={styles.startButtonText}>🚀 Start Adventure</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
-            onPress={goToMenu} 
+
+          <TouchableOpacity
+            onPress={goToMenu}
             style={styles.modernBackButton}
             activeOpacity={0.8}
           >
@@ -334,19 +311,13 @@ const SpellcastGrid = ({ goToMenu }) => {
   }
 
   return (
-    <View style={styles.modernBackground} {...panResponder.panHandlers}>
-     
-      <View
-        style={styles.gameContainer}
-        onLayout={(event) => {
-          gridLayout.current = event.nativeEvent.layout;
-        }}
-      >
+    <View style={styles.modernBackground} {...panHandlers}>
+      <View style={styles.gameContainer}>
         <View style={styles.modernHeader}>
           <View style={styles.headerLeft}>
             <Text style={styles.modernGameTitle}>SpellCast</Text>
           </View>
-          
+
           <View style={styles.headerCenter}>
             <Animated.View style={[styles.timerContainer, { transform: [{ scale: timeLeft <= 10 ? pulseAnim : 1 }] }]}>
               <Text style={[styles.modernTimer, timeLeft <= 10 ? styles.timerCritical : null]}>
@@ -358,38 +329,57 @@ const SpellcastGrid = ({ goToMenu }) => {
               <Text style={styles.scoreLabel}>POINTS</Text>
             </View>
           </View>
-          
-          <TouchableOpacity 
-            onPress={pauseGame} 
+
+          <TouchableOpacity
+            onPress={pauseGame}
             style={styles.modernPauseButton}
             activeOpacity={0.7}
           >
             <Text style={styles.pauseIcon}>⏸️</Text>
           </TouchableOpacity>
         </View>
-        
+
         <View style={styles.modernGrid}>
-          {gridData.map((row, rowIndex) => (
-            <View key={rowIndex} style={styles.gridRow}>
-              {row.map((letter, colIndex) => {
-                const isSelected = selectedCells.some(cell => cell.row === rowIndex && cell.col === colIndex);
+          {/* One flat, measured surface: the swipe engine owns its geometry. */}
+          <View
+            ref={gridRef}
+            onLayout={onGridLayout}
+            collapsable={false}
+            style={styles.gridSurface}
+          >
+            <SwipePath
+              path={path}
+              getCellCenter={getCellCenter}
+              subscribeToLivePoint={subscribeToLivePoint}
+              geometryVersion={geometryVersion}
+              valid={currentWordIsValid}
+            />
+
+            {gridData.map((row, rowIndex) =>
+              row.map((letter, colIndex) => {
+                const isSelected = path.some(
+                  (cell) => cell.row === rowIndex && cell.col === colIndex,
+                );
                 const isMultiplier = isMultiplierCell(rowIndex, colIndex);
-                
+
                 return (
-                  <Animated.View 
-                    key={colIndex} 
+                  <Animated.View
+                    key={`${rowIndex}-${colIndex}`}
+                    onLayout={onCellLayout(rowIndex, colIndex)}
                     style={[
                       styles.modernCell,
                       isSelected ? styles.selectedCell : null,
                       isMultiplier ? styles.multiplierCell : null,
-                      { 
-                        opacity: fadeAnims[rowIndex][colIndex],
-                        transform: [{ scale: scaleAnims[rowIndex][colIndex] }]
-                      }
+                      {
+                        transform: [
+                          { scale: scaleAnims[rowIndex][colIndex] },
+                          { scale: popAnims[rowIndex][colIndex] },
+                        ],
+                      },
                     ]}
-                  > 
+                  >
                     <Text style={[
-                      styles.modernLetter, 
+                      styles.modernLetter,
                       isSelected ? styles.selectedLetter : null,
                       isMultiplier ? styles.multiplierLetter : null
                     ]}>
@@ -404,36 +394,35 @@ const SpellcastGrid = ({ goToMenu }) => {
                     )}
                   </Animated.View>
                 );
-              })}
-            </View>
-          ))}
+              }),
+            )}
+          </View>
         </View>
       </View>
-      
-      {/* Enhanced Trail Effect */}
-      {trail.map((point) => (
-        <Animated.View
-          key={point.id}
-          style={[
-            styles.modernTrailPoint,
-            {
-              left: point.x - 15,
-              top: point.y - 15,
-              opacity: point.opacity,
-              transform: [{ scale: point.scale }]
-            }
-          ]}
-        />
-      ))}
 
       {/* Current Word Display */}
       <View style={styles.currentWordContainer}>
         <Text style={styles.currentWordLabel}>CURRENT WORD</Text>
-        <Text style={styles.currentWord}>
-          {selectedCells.map(cell => cell.letter).join('') || '- - -'}
+        <Text
+          style={[
+            styles.currentWord,
+            currentWordIsValid ? styles.currentWordValid : null,
+          ]}
+        >
+          {currentWord || '- - -'}
         </Text>
-        {selectedCells.some(cell => isMultiplierCell(cell.row, cell.col)) && (
+        {currentWordUsesMultiplier && (
           <Text style={styles.multiplierIndicator}>🔥 2X MULTIPLIER! 🔥</Text>
+        )}
+        {feedback && (
+          <Text
+            style={[
+              styles.feedbackText,
+              feedback.tone === 'success' ? styles.feedbackSuccess : styles.feedbackError,
+            ]}
+          >
+            {feedback.text}
+          </Text>
         )}
       </View>
 

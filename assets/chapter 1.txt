@@ -1,0 +1,26 @@
+chapter 1 
+
+With the large community of sports fans and the rise of the LLM era, it is increasingly expected that a conversational interface/hub for sports scores, news and betting information comes to replace conventional news websites. However, the sports domain naturally comes with the given challenges: information is constantly updating, everyday is a new event and the biggest aspect is live games. As well as this the regulatory environment on sports gambling implies road blocks for a smooth implementation with chat assistance.
+
+This dissertation delves into the full cycle of a project that designs, implements, tests and evaluates the cloud based LLM based assistant addressing these challenges. This system is built with Amazon Bedrock, where many subagents specialise and are coordinated by a Supervisor agent. Furthermore , a Retrieval Augmented Generation (RAG) pipeline is utilised for recent news responses and Lambda functions are ran respectively for the subagents to perceive the given data. Finally, a Next.js 15 frontend that is deployed to Vercel, gives the complete interface and incorporates a server-side authentication and account management layer backed by NextAuth.js and Amazon DynamoDB.
+
+
+1.2
+
+
+Although there is plenty of information and articles for news at disposal, there is not a single interface that allows an end user to ask a natural-language question that covers a wide range of sports, with a bookmaker. So the main placeholders can be seen in 3 categories, one beign the mainstream news services such as ESPN and BBC sport, which provide a very comprehensive feed but is scattered in sections. The second is Bookmaker sites which offer odds and in-play betting but encourage continued wagering. Thirdly you have the general conversational assistants but they lack the live sports feed, and do not offer betting capabilities.
+
+
+This frames the problem as: How can a cloud-native multi-agent LLM system be made to support sports news across multiple sources, respond with accurate and specialised data, and support simulated bet placement with safeguarding? All to be done through a secure authenticated web interface and be cost-effective.
+
+
+
+1.3
+
+
+The objective of this project is to check if the multi-agent architecture designed with amazon bedrock put with a modern frontend can provide a service that can outperform a single-agent baseline in routing accuracy, grounding quality and more. The aims listed specifically are: 
+
+1. Take information from publicly available news sources (ESPN, BBC Sport, Sky Sports) covering football, cricket, basketball, and tennis making a knowledge base with information from plenty of documents
+
+2. Design a full scale multi-agent architecture in Amazon Bedrock, This comprising of a Supervisor Agent handling 5 sub-agents each delegated with their on specialised field. Equipped with a universal knowledge base and unique action groups.
+

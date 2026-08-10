@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, Dimensions } from 'react-native';
-import { styles } from 'C:/Users/Wisam/SpellCast/styles.js';
+import { styles } from './styles.js';
 
 const { width, height } = Dimensions.get('window');
 

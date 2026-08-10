@@ -1,4 +1,4 @@
-import { GRID_SIZE } from 'C:/Users/Wisam/SpellCast/game_constants.js';
+import { GRID_SIZE } from './game_constants.js';
 
 /**
  * Generates a test grid with "TESTSTESTSTESTSTESTSTESTS"
@@ -233,19 +233,5 @@ export const formatTime = (seconds) => {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 };
 
-/**
- * Check if two cells are adjacent (including diagonals)
- */
-export const isAdjacent = (last, current) => {
-  if (!last) return true;
-  const rowDiff = Math.abs(last.row - current.row);
-  const colDiff = Math.abs(last.col - current.col);
-  return rowDiff <= 1 && colDiff <= 1;
-};
-
-/**
- * Check if a cell is already selected
- */
-export const isAlreadySelected = (current, selectedCells) => {
-  return selectedCells.some(cell => cell.row === current.row && cell.col === current.col);
-};
+// Cell adjacency and selection rules now live in swipe_logic.js, next to the
+// rest of the swipe engine.

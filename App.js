@@ -1,8 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
-import MenuScreen from 'C:/Users/Wisam/SpellCast/menu_screen.js';
-import SpellcastGrid from 'C:/Users/Wisam/SpellCast/spellcast_grid.js';
-import InstructionsScreen from 'C:/Users/Wisam/SpellCast/instructions_screen.js';
+import MenuScreen from './menu_screen.js';
+import SpellcastGrid from './spellcast_grid.js';
+import InstructionsScreen from './instructions_screen.js';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState('menu');

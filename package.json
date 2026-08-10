@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "test": "node swipe_logic.test.js",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",

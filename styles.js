@@ -1,5 +1,13 @@
 import { StyleSheet } from 'react-native';
-import { CELL_SIZE, CELL_MARGIN } from 'C:/Users/Wisam/SpellCast/game_constants.js';
+import {
+  CELL_MARGIN,
+  CELL_SIZE,
+  GRID_FRAME_PADDING,
+  GRID_WIDTH,
+  LETTER_FONT_SIZE,
+  PATH_NODE_SIZE,
+  PATH_THICKNESS,
+} from './game_constants.js';
 
 export const styles = StyleSheet.create({
   modernBackground: {
@@ -164,7 +172,7 @@ export const styles = StyleSheet.create({
   },
   modernGrid: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    padding: 15,
+    padding: GRID_FRAME_PADDING,
     borderRadius: 25,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.1)',
@@ -174,8 +182,32 @@ export const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
-  gridRow: {
+  // The tiles live in one wrapping container so every cell reports its position
+  // relative to the same origin the swipe engine measures.
+  gridSurface: {
+    width: GRID_WIDTH,
     flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  pathLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  pathSegment: {
+    position: 'absolute',
+    height: PATH_THICKNESS,
+    borderRadius: PATH_THICKNESS / 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+  },
+  pathNode: {
+    position: 'absolute',
+    width: PATH_NODE_SIZE,
+    height: PATH_NODE_SIZE,
+    borderRadius: PATH_NODE_SIZE / 2,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
   },
   modernCell: {
     width: CELL_SIZE,
@@ -200,7 +232,7 @@ export const styles = StyleSheet.create({
     elevation: 8,
   },
   modernLetter: {
-    fontSize: 28,
+    fontSize: LETTER_FONT_SIZE,
     fontWeight: '900',
     color: '#2c3e50',
     letterSpacing: 1,
@@ -261,6 +293,26 @@ export const styles = StyleSheet.create({
     textAlign: 'center',
     letterSpacing: 3,
     minHeight: 30,
+  },
+  currentWordValid: {
+    color: '#2ed573',
+    textShadowColor: 'rgba(46, 213, 115, 0.8)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
+  },
+  feedbackText: {
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginTop: 6,
+    letterSpacing: 1,
+    color: '#8b9dc3',
+  },
+  feedbackSuccess: {
+    color: '#2ed573',
+  },
+  feedbackError: {
+    color: '#ff6b81',
   },
   wordsPanel: {
     position: 'absolute',
