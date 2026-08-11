@@ -34,3 +34,7 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# generated / downloaded
+tools/sources/
+.expo-export-check/
