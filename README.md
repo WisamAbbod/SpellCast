@@ -1,31 +1,14 @@
-<div align="center">
+# SpellCast
 
-# SPELLCAST
-
-**Trace words across the stars.**
-
-A daily word game for iOS and Android. One board a day, sixty seconds, everyone
-in the world gets the same letters.
+**Trace words across the stars.** A daily word game for iOS and Android. One
+board a day, sixty seconds, and everyone in the world gets the same letters.
 
 Expo SDK 54 · React Native 0.81 · New Architecture · runs in Expo Go
 
-</div>
-
----
-
-<div align="center">
-
 | | | |
-|:--:|:--:|:--:|
-| <img src="docs/screenshots/menu.png" width="230"> | <img src="docs/screenshots/game.png" width="230"> | <img src="docs/screenshots/results.png" width="230"> |
+|---|---|---|
+| <img src="docs/screenshots/menu.jpg" width="240"> | <img src="docs/screenshots/game.jpg" width="240"> | <img src="docs/screenshots/results.jpg" width="240"> |
 | The daily puzzle | Sixty seconds | What you missed |
-
-</div>
-
-> Drop your screenshots into `docs/screenshots/` as `menu.png`, `game.png` and
-> `results.png` and they'll appear above.
-
----
 
 ## Play
 
