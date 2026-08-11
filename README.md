@@ -5,10 +5,10 @@ board a day, sixty seconds, and everyone in the world gets the same letters.
 
 Expo SDK 54 · React Native 0.81 · New Architecture · runs in Expo Go
 
-| | | |
-|---|---|---|
+|                                                   |                                                   |                                                      |
+| ------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------- |
 | <img src="docs/screenshots/menu.jpg" width="240"> | <img src="docs/screenshots/game.jpg" width="240"> | <img src="docs/screenshots/results.jpg" width="240"> |
-| The daily puzzle | Sixty seconds | What you missed |
+| The daily puzzle                                  | Sixty seconds                                     | What you missed                                      |
 
 ## Play
 
@@ -17,22 +17,19 @@ npm install
 npm start        # scan the QR code with Expo Go
 ```
 
-That's it. No accounts, no backend, no configuration — the game is complete
-offline.
-
 ## What's in it
 
-| | |
-|---|---|
-| **Daily puzzle** | One scored attempt per day. Same board for everyone, worldwide. |
-| **Streaks** | Miss a day and it resets. Come back and it's waiting. |
-| **Practice** | Unlimited rounds, plus every past puzzle, replayable forever. |
-| **Bonus tiles** | A gold tile doubles the word, a cyan tile triples a letter. |
-| **Combos** | Words in quick succession build a multiplier up to 2.5×. |
-| **Par** | Scored against the ten best words on the board, not an arbitrary target. |
-| **Stats** | History, best word, average against par, medal bands. |
-| **Sharing** | A Wordle-style result you can post without spoiling the board. |
-| **Leaderboard** | Local by default. Add two keys for a global daily board. |
+|                  |                                                                          |
+| ---------------- | ------------------------------------------------------------------------ |
+| **Daily puzzle** | One scored attempt per day. Same board for everyone, worldwide.          |
+| **Streaks**      | Miss a day and it resets. Come back and it's waiting.                    |
+| **Practice**     | Unlimited rounds, plus every past puzzle, replayable forever.            |
+| **Bonus tiles**  | A gold tile doubles the word, a cyan tile triples a letter.              |
+| **Combos**       | Words in quick succession build a multiplier up to 2.5×.                 |
+| **Par**          | Scored against the ten best words on the board, not an arbitrary target. |
+| **Stats**        | History, best word, average against par, medal bands.                    |
+| **Sharing**      | A Wordle-style result you can post without spoiling the board.           |
+| **Leaderboard**  | Local by default. Add two keys for a global daily board.                 |
 
 ## How it works
 
@@ -70,10 +67,10 @@ to mean the same board in Auckland and Los Angeles. That's also why puzzles are
 
 ### Two dictionaries, deliberately
 
-| Tier | Size | Used for |
-|---|---|---|
-| **ENABLE1** | 105,185 words | Deciding whether what you traced is a real word |
-| **Common subset** | 20,838 words | Par, board quality, seed words, the results screen |
+| Tier              | Size          | Used for                                           |
+| ----------------- | ------------- | -------------------------------------------------- |
+| **ENABLE1**       | 105,185 words | Deciding whether what you traced is a real word    |
+| **Common subset** | 20,838 words  | Par, board quality, seed words, the results screen |
 
 So a real word is never rejected, and the game never congratulates you for
 missing one nobody has heard of. Both live in a single trie whose terminals are
@@ -185,7 +182,7 @@ Local storage stays the base layer regardless: submissions are written locally
 first and queued for retry if the network is gone, so history and stats work
 whether the backend exists, is unreachable, or was never configured.
 
-Scores are submitted by the client, so this is a *friendly* leaderboard rather
+Scores are submitted by the client, so this is a _friendly_ leaderboard rather
 than a cheat-proof one, and the app says so. Making it authoritative would mean
 re-running the solver in an Edge Function against the seeded board — possible
 precisely because `src/game/` is free of React, but a project of its own.
