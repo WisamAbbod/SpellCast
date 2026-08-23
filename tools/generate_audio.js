@@ -173,7 +173,9 @@ const NOTE = {
   C2: 65.41, E2: 82.41, F2: 87.31, G2: 98.0, A2: 110.0, B2: 123.47,
   C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.0, A3: 220.0, B3: 246.94,
   C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.0, A4: 440.0, B4: 493.88,
-  C5: 523.25, D5: 587.33, E5: 659.25, G5: 783.99, A5: 880.0, C6: 1046.5, E6: 1318.5,
+  C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.0,
+  C6: 1046.5, D6: 1174.66, E6: 1318.5,
+  Gs3: 207.65, Gs4: 415.3,
 };
 
 /* --------------------------------------------------------------- sfx -- */
@@ -293,53 +295,111 @@ const buildStart = () => {
  */
 const buildMusic = () => {
   const barLength = 4.8;
-  const bars = 4;
+  const bars = 8;
   const samples = buffer(barLength * bars);
+  const rng = mulberry32(90210);
 
+  /*
+   * Eight bars, not four.
+   *
+   * The old loop was four bars with the same arpeggio shape in every one and a
+   * shimmer on alternate bars, so its real period sounded like two bars - it
+   * announced itself as about ten seconds and then jumped back.
+   *
+   * This one runs Am F C G Dm Am F E, which repeats nothing until the whole
+   * thing has gone round, and ENDS ON E. E is the dominant of A minor, so the
+   * loop point is a perfect cadence resolving into the Am the loop starts on:
+   * the moment of restarting is the most musically settled moment in the piece
+   * rather than the most jarring.
+   */
   const progression = [
-    { pad: [NOTE.A3, NOTE.C4, NOTE.E4], bass: NOTE.A2, arp: [NOTE.A4, NOTE.C5, NOTE.E5, NOTE.C5] },
-    { pad: [NOTE.F3, NOTE.A3, NOTE.C4], bass: NOTE.F2, arp: [NOTE.F4, NOTE.A4, NOTE.C5, NOTE.A4] },
-    { pad: [NOTE.C4, NOTE.E4, NOTE.G4], bass: NOTE.C3, arp: [NOTE.C5, NOTE.E5, NOTE.G5, NOTE.E5] },
-    { pad: [NOTE.G3, NOTE.B3, NOTE.D4], bass: NOTE.G2, arp: [NOTE.G4, NOTE.B4, NOTE.D5, NOTE.B4] },
+    { pad: [NOTE.A3, NOTE.C4, NOTE.E4], bass: NOTE.A2, fifth: NOTE.E3, arp: [NOTE.A4, NOTE.C5, NOTE.E5, NOTE.C5] },
+    { pad: [NOTE.F3, NOTE.A3, NOTE.C4], bass: NOTE.F2, fifth: NOTE.C3, arp: [NOTE.F4, NOTE.A4, NOTE.C5, NOTE.A4] },
+    { pad: [NOTE.C4, NOTE.E4, NOTE.G4], bass: NOTE.C3, fifth: NOTE.G2, arp: [NOTE.C5, NOTE.E5, NOTE.G5, NOTE.E5] },
+    { pad: [NOTE.G3, NOTE.B3, NOTE.D4], bass: NOTE.G2, fifth: NOTE.D3, arp: [NOTE.G4, NOTE.B4, NOTE.D5, NOTE.B4] },
+    { pad: [NOTE.D4, NOTE.F4, NOTE.A4], bass: NOTE.D3, fifth: NOTE.A2, arp: [NOTE.D5, NOTE.F5, NOTE.A5, NOTE.F5] },
+    { pad: [NOTE.A3, NOTE.C4, NOTE.E4], bass: NOTE.A2, fifth: NOTE.E3, arp: [NOTE.E5, NOTE.C5, NOTE.A4, NOTE.C5] },
+    { pad: [NOTE.F3, NOTE.A3, NOTE.C4], bass: NOTE.F2, fifth: NOTE.C3, arp: [NOTE.C5, NOTE.A4, NOTE.F4, NOTE.A4] },
+    { pad: [NOTE.E3, NOTE.Gs3, NOTE.B3], bass: NOTE.E2, fifth: NOTE.B2, arp: [NOTE.B4, NOTE.Gs4, NOTE.E5, NOTE.Gs4] },
+  ];
+
+  /*
+   * A different rhythm in every bar. 1 sounds the chord tone, 0 leaves a hole.
+   * Repetition is what made the old loop feel short, and holes are what make a
+   * line breathe - the last bar thins out deliberately so the cadence lands in
+   * space rather than on top of a busy arpeggio.
+   */
+  const rhythms = [
+    [1, 0, 1, 1, 0, 1, 0, 1],
+    [1, 0, 1, 0, 1, 1, 0, 1],
+    [1, 1, 0, 1, 0, 1, 1, 0],
+    [1, 0, 1, 0, 1, 0, 1, 1],
+    [1, 0, 1, 1, 0, 1, 0, 0],
+    [1, 1, 0, 1, 0, 1, 0, 1],
+    [1, 0, 1, 0, 1, 1, 0, 0],
+    [1, 0, 0, 1, 0, 0, 1, 0],
   ];
 
   progression.forEach((chord, bar) => {
     const start = bar * barLength;
 
+    // Pads overlap into the next bar and wrap past the end, which is what makes
+    // one chord dissolve into the next instead of switching.
     chord.pad.forEach((freq, voice) => {
       addNote(samples, {
-        start, duration: barLength + 1.2, freq, wave: 'triangle',
-        gain: 0.09, attack: 1.1, release: 1.6, wrap: true,
-        vibratoHz: 0.18 + voice * 0.05, vibratoDepth: 0.7, harmonics: [1, 0.16],
+        start, duration: barLength + 1.4, freq, wave: 'triangle',
+        gain: 0.085, attack: 1.2, release: 1.8, wrap: true,
+        vibratoHz: 0.16 + voice * 0.04, vibratoDepth: 0.7, harmonics: [1, 0.16],
       });
     });
 
     addNote(samples, {
-      start, duration: barLength * 0.96, freq: chord.bass, wave: 'sine',
-      gain: 0.16, attack: 0.35, release: 0.9, wrap: true,
+      start, duration: barLength * 0.62, freq: chord.bass, wave: 'sine',
+      gain: 0.17, attack: 0.3, release: 0.7, wrap: true,
     });
 
-    // Eight plucked eighths per bar, panning through the chord tones.
-    for (let step = 0; step < 8; step++) {
-      const freq = chord.arp[step % chord.arp.length];
+    // A fifth on the third beat in most bars - enough movement that the low end
+    // is not just a pulse, absent in the last bar so the cadence stays open.
+    if (bar !== bars - 1) {
       addNote(samples, {
-        start: start + step * (barLength / 8),
-        duration: 0.85, freq, wave: 'sine', gain: 0.075,
-        attack: 0.004, release: 0.5, decay: 3.4, wrap: true,
-        harmonics: [1, 0.28, 0.1],
+        start: start + barLength * 0.5, duration: barLength * 0.42, freq: chord.fifth,
+        wave: 'sine', gain: 0.1, attack: 0.25, release: 0.6, wrap: true,
       });
     }
 
-    // A high shimmer every other bar, so the loop doesn't feel mechanical.
-    if (bar % 2 === 0) {
+    rhythms[bar].forEach((sounds, step) => {
+      if (!sounds) return;
       addNote(samples, {
-        start: start + barLength * 0.5, duration: 2.4, freq: NOTE.E6,
-        wave: 'sine', gain: 0.035, attack: 0.6, release: 1.5, wrap: true,
+        start: start + step * (barLength / 8),
+        duration: 0.9,
+        freq: chord.arp[step % chord.arp.length],
+        wave: 'sine',
+        // A little unevenness so it sounds played rather than sequenced.
+        gain: 0.062 + rng() * 0.022,
+        attack: 0.004, release: 0.55, decay: 3.2, wrap: true,
+        harmonics: [1, 0.26, 0.09],
+      });
+    });
+
+    // Shimmer on a three-bar cycle, so it never lines up with the four-bar
+    // half of the progression and cannot imply a shorter loop.
+    if (bar % 3 === 1) {
+      addNote(samples, {
+        start: start + barLength * 0.45, duration: 2.8,
+        freq: bar > 4 ? NOTE.D6 : NOTE.E6,
+        wave: 'sine', gain: 0.03, attack: 0.7, release: 1.7, wrap: true,
       });
     }
   });
 
-  // No edge fade here: fading the ends would make the loop point audible.
+  // One breath across the whole loop, wrapping through the loop point so there
+  // is a line longer than any bar for the ear to follow.
+  addNote(samples, {
+    start: barLength * 2.5, duration: barLength * 6, freq: NOTE.A4, wave: 'triangle',
+    gain: 0.028, attack: barLength * 2, release: barLength * 2.6, wrap: true,
+    vibratoHz: 0.09, vibratoDepth: 1.1,
+  });
+
   writeWav('music.wav', normalise(samples, 0.68));
 };
 

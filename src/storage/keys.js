@@ -14,6 +14,7 @@ export const KEYS = {
   profile: `${PREFIX}profile`,
   dailyIndex: `${PREFIX}dailyIndex`,
   queue: `${PREFIX}queue`,
+  slowSetup: `${PREFIX}slowSetup`,
   daily: (dateKey) => `${PREFIX}daily/${dateKey}`,
 };
 

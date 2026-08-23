@@ -1,5 +1,5 @@
 import { InteractionManager } from 'react-native';
-import { initAudio } from '../audio/audio.js';
+import { initAudio, startMusic } from '../audio/audio.js';
 import { warmDictionary } from '../game/dictionary.js';
 import { flushLeaderboardQueue } from '../leaderboard/index.js';
 import { store } from '../storage/asyncStore.js';
@@ -22,6 +22,9 @@ export const boot = async () => {
   InteractionManager.runAfterInteractions(() => {
     warmDictionary();
     initAudio();
+    // Asked for here rather than when a round starts, so the menu is not
+    // silent. initAudio honours the request once the player is built.
+    startMusic();
     flushLeaderboardQueue();
   });
 };

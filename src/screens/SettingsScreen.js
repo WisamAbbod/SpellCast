@@ -49,13 +49,26 @@ const SettingsScreen = ({ nav }) => {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <Card title="Sound">
+          {/* Above the per-channel switches, because it overrules them: without
+              it here, turning "Music" on while muted would appear to do
+              nothing. */}
+          <Row
+            label="Mute everything"
+            hint="Silences music and effects without changing the rest"
+            value={settings.muted}
+            onValueChange={(value) => {
+              saveSettings({ muted: value });
+              if (value) stopMusic();
+              else if (settings.music) startMusic();
+            }}
+          />
           <Row
             label="Music"
-            hint="Ambient loop during play"
+            hint="Ambient loop, from the menu onwards"
             value={settings.music}
             onValueChange={(value) => {
               saveSettings({ music: value });
-              if (value) startMusic();
+              if (value && !settings.muted) startMusic();
               else stopMusic();
             }}
           />

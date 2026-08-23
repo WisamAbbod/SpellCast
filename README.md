@@ -31,6 +31,48 @@ npm start        # scan the QR code with Expo Go
 | **Sharing**      | A Wordle-style result you can post without spoiling the board.           |
 | **Leaderboard**  | Local by default. Add two keys for a global daily board.                 |
 
+## Slow mode
+
+A second game on the same board: **pass and play, 2–6 players, five rounds
+each**, with bots filling any empty seat. Modelled on Discord SpellCast, and
+scored nothing like the daily mode.
+
+| | Daily | Slow |
+|---|---|---|
+| Shape | one player, 60 seconds | 2–6 players, 5 turns each |
+| What scores | word length dominates | letter values dominate |
+| Long words | ×3 and +100 at seven letters | flat +10 at six |
+| Letter values | 1 / 2 / 5 / 8 / 10 | 1 to 8, Scrabble-ish |
+| Bonus tiles | fixed for the round | re-dealt every turn |
+| The board | fixed for the round | used letters are replaced |
+| Economy | none | gems buy abilities |
+
+Letters carry the value here — Q and Z are worth 8, J and X 7, A/E/I/O just 1 —
+so a short expensive word can beat a long cheap one. Each tile prints its own
+value in the corner, so that is something you can read off the board rather than
+having to remember. Double-letter, triple-letter and
+2× word tiles move after every turn, and the letters a word consumed are
+replaced, so no two players ever face the same board.
+
+Gems sit on tiles; cover one with your word and you collect it, up to ten. They
+buy **shuffle** (1), **swap a letter** (3) and **a hint** (4) — and every gem
+you are still holding when the game ends is worth a point, so hoarding is a real
+strategy. Turn off the clock, or leave it on and each turn lasts 30 seconds with
+one gem buying fifteen more.
+
+Bots are honest: they see exactly what you see — the solver over the live board —
+and then deliberately play worse. Difficulty is a *band* of the ranked word list
+rather than noise on the best word, so Easy reliably plays a mediocre word
+instead of occasionally stumbling onto the best one. A bot's turn is played out
+tile by tile rather than applied, because a bot that silently changed the score
+would be indistinguishable from a bug.
+
+The whole thing is a pure state machine in `src/game/slow/` — every action is
+state in, state out — so a hundred complete games are played through in the test
+suite on every run, checking that gems never exceed the cap, turns always
+advance by exactly one, no word is ever played twice, and the board always still
+has words in it.
+
 ## How it works
 
 ### Boards are verified, not hoped for
@@ -93,9 +135,12 @@ again.
 src/game/         board generation, solver, scoring, the daily calendar, swipe
                   rules. Imports nothing from React or react-native, which is
                   what lets the whole game engine be tested under plain node.
-src/storage/      settings, profile, daily records, streaks
+src/game/slow/    slow mode: its own scoring, its own board, and the turn-based
+                  state machine — pure reducers, state in and state out.
+src/storage/      settings, profile, daily records, streaks, the slow-mode roster
 src/leaderboard/  one contract, two implementations
 src/screens/      menu · daily · practice · game · results · stats · settings · help
+                  slow setup · slow game · slow results
 src/components/   board, tiles, swipe trail, buttons, sheets, confetti
 src/theme/        colours, type, responsive board geometry
 tools/            regenerate the dictionary and the audio, check imports
@@ -106,8 +151,9 @@ tests/            one suite per module
 
 ```bash
 npm start                  # Expo dev server
-npm test                   # 195 checks, 9 suites, no framework, no dev deps
+npm test                   # 327 checks, 11 suites, no framework, no dev deps
 npm run check              # verifies every local import resolves
+npm run sim:slow           # play a whole slow-mode game out in the terminal
 npm run build:dictionary   # re-download and rebuild both word tiers
 npm run build:audio        # re-synthesise every sound from scratch
 ```
@@ -115,15 +161,32 @@ npm run build:audio        # re-synthesise every sound from scratch
 `npm test` covers RNG determinism, solver correctness, same-seed-same-board,
 a 200-board quality sweep, UTC date boundaries and leap years, every streak
 transition including a device clock moving backwards, storage migrations, and a
-full round played end to end.
+full round played end to end. Slow mode adds a hundred complete games played
+turn by turn, asserting that gems never pass the cap, that a turn always
+advances by exactly one, that no word is played twice, and that the board is
+never left without a word on it.
+
+`npm run sim:slow` prints a full game — every turn, every shuffle, every score,
+and the final table. It drives the engine in the same order the screen does,
+which is how a bot-shuffles-then-plays-a-stale-path soft-lock got caught before
+it ever reached a phone.
 
 ## Sound
 
 Every sound is **generated from scratch** by
 [`tools/generate_audio.js`](tools/generate_audio.js) — a dependency-free
-synthesiser that writes 14 PCM WAV files: a seamless 19-second ambient loop,
+synthesiser that writes 14 PCM WAV files: a seamless 38-second ambient loop,
 six rising select blips, and effects for words, combos, the final countdown and
-game over. No samples, no licences, about 1 MB.
+game over. No samples, no licences, about 1.8 MB.
+
+The loop is eight bars — Am F C G Dm Am F E — and **ends on the dominant**, so
+the point where it restarts is a perfect cadence resolving into the Am it opens
+on: the most settled moment in the piece rather than the most jarring. Every bar
+has its own arpeggio rhythm and the shimmer runs on a three-bar cycle, so
+nothing lines up to imply a shorter loop. Notes that run past the end wrap round
+and add into the beginning, which is what makes the seam inaudible — measured,
+the jump across the loop point is smaller than the largest ordinary
+sample-to-sample step inside the file.
 
 To use your own instead, drop a file with the same name into `assets/audio/`.
 Nothing in the app cares how it was made.

@@ -73,14 +73,14 @@ export const initAudio = async () => {
 
   subscribeToSettings((settings) => {
     if (music) safely(() => { music.volume = settings.musicVolume; });
-    if (!settings.music) stopMusic();
+    if (settings.muted || !settings.music) stopMusic();
     else if (musicWanted) startMusic();
   });
 
   // Music has no business playing over someone else's phone call.
   AppState.addEventListener('change', (state) => {
     if (state === 'active') {
-      if (musicWanted && getSettings().music) startMusic();
+      if (musicWanted && getSettings().music && !getSettings().muted) startMusic();
     } else {
       safely(() => music && music.pause());
     }
@@ -92,7 +92,7 @@ export const initAudio = async () => {
 
 const playFrom = (key, source, volumeScale = 1) => {
   const settings = getSettings();
-  if (!settings.sound) return;
+  if (settings.muted || !settings.sound) return;
 
   const pool = poolFor(key, source);
   if (pool.length === 0) return;
@@ -111,8 +111,11 @@ const playFrom = (key, source, volumeScale = 1) => {
 /* --------------------------------------------------------------- music -- */
 
 export const startMusic = () => {
+  // The intent is remembered even while muted, so unmuting picks the music back
+  // up wherever the player happens to be.
   musicWanted = true;
-  if (!getSettings().music || !music) return;
+  const settings = getSettings();
+  if (settings.muted || !settings.music || !music) return;
   safely(() => {
     music.volume = getSettings().musicVolume;
     music.play();

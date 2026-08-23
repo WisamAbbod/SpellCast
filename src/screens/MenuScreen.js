@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Screen from '../components/Screen.js';
 import Button from '../components/Button.js';
+import MuteButton from '../components/MuteButton.js';
 import { Stat, StatRow } from '../components/Stat.js';
 import { useNow } from '../hooks/useNow.js';
 import { colors } from '../theme/colors.js';
@@ -34,6 +35,10 @@ const MenuScreen = ({ nav }) => {
 
   return (
     <Screen>
+      <View style={styles.topBar}>
+        <MuteButton />
+      </View>
+
       <View style={styles.header}>
         <Text style={styles.title}>SPELLCAST</Text>
         <Text style={styles.tagline}>Trace words across the stars</Text>
@@ -66,6 +71,13 @@ const MenuScreen = ({ nav }) => {
           onPress={() => nav.push('practice')}
         />
         <Button
+          label="Slow mode"
+          subtitle="Pass & play · 2-6 players · 5 rounds"
+          variant="secondary"
+          icon="♟"
+          onPress={() => nav.push('slowSetup')}
+        />
+        <Button
           label="Stats & leaderboard"
           variant="secondary"
           icon="▲"
@@ -82,7 +94,11 @@ const MenuScreen = ({ nav }) => {
 };
 
 const styles = StyleSheet.create({
-  header: { alignItems: 'center', marginTop: space.xxl, marginBottom: space.xl },
+  // In the flow, not absolutely placed. An absolute child is positioned from
+  // the parent's border box, so top: 0 ignored the safe-area padding and put
+  // the button up under the notch where it could not be reached.
+  topBar: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: space.sm },
+  header: { alignItems: 'center', marginTop: space.md, marginBottom: space.xl },
   title: {
     fontFamily: fonts.display,
     fontSize: 42,

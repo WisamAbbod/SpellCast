@@ -17,6 +17,7 @@ const SwipePath = ({
   getCellCenter,
   subscribeToLivePoint,
   valid,
+  tone,
   geometryVersion,
   thickness,
   nodeSize,
@@ -33,7 +34,12 @@ const SwipePath = ({
 
   if (centers.length === 0) return null;
 
-  const color = valid ? colors.pathValid : colors.path;
+  // An explicit tone wins: a hint or a bot's move is not "the word you are
+  // currently tracing", so it should not be green just because it is valid.
+  const color =
+    (tone === 'hint' && colors.pathHint) ||
+    (tone === 'bot' && colors.pathBot) ||
+    (valid ? colors.pathValid : colors.path);
   const points = livePoint ? [...centers, livePoint] : centers;
   const segments = [];
 

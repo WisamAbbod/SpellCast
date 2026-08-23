@@ -27,12 +27,17 @@ export const colors = {
   tile: '#F4F3FF',
   tileSelected: '#7C5CFF',
   tileWord: '#FFD166', // 2x word tile
-  tileLetter: '#4ADEDE', // 3x letter tile
+  tileLetter: '#4ADEDE', // double / triple letter tile
+  gem: '#FF7BD5', // the jewels slow mode pays abilities with
 
   // The swipe trail. Drawn ABOVE the tiles with alpha, so it stays visible -
   // underneath opaque tiles only the sliver in the gutter ever showed.
   path: 'rgba(124, 92, 255, 0.55)',
   pathValid: 'rgba(61, 220, 151, 0.6)',
+  // Used when the board is showing a word rather than following a finger:
+  // a bot playing its turn, or a hint someone paid four gems for.
+  pathHint: 'rgba(255, 209, 102, 0.65)',
+  pathBot: 'rgba(74, 222, 222, 0.6)',
 
   medal: {
     none: '#6B739B',

@@ -13,6 +13,7 @@ import Board from '../components/Board.js';
 import Button from '../components/Button.js';
 import Sheet from '../components/Sheet.js';
 import Confetti from '../components/Confetti.js';
+import MuteButton from '../components/MuteButton.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useCountdown } from '../hooks/useCountdown.js';
 import { useBoardLayout, radius, space } from '../theme/layout.js';
@@ -27,7 +28,7 @@ import { cellsToIndices, toIndex } from '../game/board.js';
 import { getBoard } from '../game/generator.js';
 import { generateBonusCells } from '../game/bonusCells.js';
 import { MAX_WORD_LENGTH, isValidWord } from '../game/dictionary.js';
-import { comboMultiplier, scoreWord } from '../game/scoring.js';
+import { comboMultiplier, letterScore, scoreWord } from '../game/scoring.js';
 import { deadlineFrom, formatTime, resumeDeadline } from '../game/time.js';
 import { shuffleSeed } from '../game/daily.js';
 import {
@@ -338,6 +339,8 @@ const GameScreen = ({ nav, mode = 'practice', dateKey, seed, cellSeed, resume })
           <Text style={styles.pauseIcon}>❚❚</Text>
         </Pressable>
 
+        <MuteButton size={44} />
+
         <View style={styles.hudCenter}>
           <Text style={[styles.timer, critical && styles.timerCritical]}>
             {formatTime(secondsLeft)}
@@ -390,6 +393,7 @@ const GameScreen = ({ nav, mode = 'practice', dateKey, seed, cellSeed, resume })
           layout={layout}
           selection={swipe.path}
           bonus={bonus}
+          letterValue={letterScore}
           popKeys={popKeys}
           swipe={swipe}
           valid={currentIsValid}

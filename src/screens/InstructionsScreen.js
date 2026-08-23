@@ -8,6 +8,10 @@ import { fonts } from '../theme/typography.js';
 import { space } from '../theme/layout.js';
 import { GAME_DURATION, MIN_WORD_LENGTH } from '../game/rules.js';
 import { MAX_WORD_LENGTH } from '../game/dictionary.js';
+import {
+  ABILITIES, LONG_WORD_BONUS, LONG_WORD_MIN, MAX_GEMS, MAX_PLAYERS,
+  MIN_PLAYERS, POINTS_PER_LEFTOVER_GEM, SLOW_ROUNDS, TURN_SECONDS,
+} from '../game/slow/rules.js';
 
 const Rule = ({ icon, title, children }) => (
   <View style={styles.rule}>
@@ -34,6 +38,11 @@ const InstructionsScreen = ({ nav }) => (
           Find as much as you can before the clock runs out. Longer words are
           worth far more than several short ones.
         </Rule>
+        <Rule icon="①" title="Letter values">
+          The small number in the corner of each tile is what that letter is
+          worth. Rare letters pay far more — a Q or a Z is 10, a vowel is 1 —
+          but length matters more here than rarity does.
+        </Rule>
         <Rule icon="2x" title="Bonus tiles">
           The gold tile doubles the whole word. The cyan tile triples that single
           letter. They stay put for the whole round.
@@ -59,6 +68,39 @@ const InstructionsScreen = ({ nav }) => (
         </Text>
       </Card>
 
+      <Card title="Slow mode" style={styles.card}>
+        <Text style={styles.body}>
+          A different game on the same board. {MIN_PLAYERS}–{MAX_PLAYERS} players
+          share one phone and take turns, for {SLOW_ROUNDS} rounds each. Bots can
+          fill any empty seat.
+        </Text>
+        <View style={styles.spacer} />
+        <Rule icon="◆" title="Letters carry the value">
+          Forget length multipliers — here a Q or a Z is worth eight points while
+          A, E, I and O are worth one, so a short, expensive word can beat a
+          long, cheap one. Words of {LONG_WORD_MIN} letters or more add a flat
+          +{LONG_WORD_BONUS}. The number in the corner of each tile is that
+          letter’s value — slow mode prices them 1 to 8, and most letters cost
+          something different here to what they cost on the daily board.
+        </Rule>
+        <Rule icon="2x" title="Tiles move every turn">
+          Double letter, triple letter and a 2x word tile are re-dealt after
+          every word, and the letters you used are replaced — so the board the
+          next player sees is never the one you played on.
+        </Rule>
+        <Rule icon="◇" title="Gems buy abilities">
+          Cover a gem tile with your word to collect it, up to {MAX_GEMS}.
+          Shuffle costs {ABILITIES.shuffle.cost}, swapping a letter costs{' '}
+          {ABILITIES.swap.cost}, and a hint costs {ABILITIES.hint.cost}. Every
+          gem you finish holding is worth {POINTS_PER_LEFTOVER_GEM} point, so
+          hoarding is a real strategy.
+        </Rule>
+        <Rule icon="⏱" title="Optional clock">
+          Switch the timer on and each turn lasts {TURN_SECONDS} seconds. One gem
+          buys more time.
+        </Rule>
+      </Card>
+
       <Card title="Par" style={styles.card}>
         <Text style={styles.body}>
           Par is the total of the ten best words hiding in the board. Nobody
@@ -74,6 +116,7 @@ const InstructionsScreen = ({ nav }) => (
 );
 
 const styles = StyleSheet.create({
+  spacer: { height: space.sm },
   title: {
     fontFamily: fonts.display, fontSize: 26, color: colors.text,
     letterSpacing: 4, textAlign: 'center', marginVertical: space.md,

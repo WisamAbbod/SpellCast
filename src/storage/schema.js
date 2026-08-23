@@ -9,6 +9,9 @@ export const CURRENT_SCHEMA_VERSION = 1;
 
 export const DEFAULT_SETTINGS = {
   v: 1,
+  // One switch over the lot, so a player can silence the game without having
+  // to remember which of music and effects they had on.
+  muted: false,
   music: true,
   sound: true,
   haptics: true,
@@ -56,6 +59,20 @@ export const DEFAULT_DAILY_RECORD = {
   topFound: 0,
   topTotal: 10,
   checkpoint: null, // { score, words, secondsLeft, at }
+};
+
+/**
+ * The last slow-mode roster, so nobody retypes four names every game. Only the
+ * setup is remembered - a game in progress is not, because a pass-and-play game
+ * with the phone put down is over.
+ */
+export const DEFAULT_SLOW_SETUP = {
+  v: 1,
+  players: [
+    { name: 'Player 1', isBot: false, level: 'medium' },
+    { name: 'Nova', isBot: true, level: 'medium' },
+  ],
+  timerEnabled: false,
 };
 
 /** Shallow-merges one level deep, which is as deep as these records nest. */
