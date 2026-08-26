@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { getSettings, subscribeToSettings } from '../storage/settings.js';
 import { MUSIC, SELECT_LADDER, SOUNDS } from './sounds.js';
+import { DEFAULT_TRACK } from './tracks.js';
 
 /**
  * Sound and feel.
@@ -21,6 +22,7 @@ const POOL_SIZE = 3;
 let ready = false;
 let music = null;
 let musicWanted = false;
+let currentTrackKey = null;
 const pools = new Map();
 const cursors = new Map();
 
@@ -62,7 +64,10 @@ export const initAudio = async () => {
   );
 
   safely(() => {
-    music = createAudioPlayer(MUSIC);
+    // Read from settings rather than from currentTrackKey: a preview may have
+    // set that already, and the equipped track is what should survive a boot.
+    currentTrackKey = getSettings().trackKey || DEFAULT_TRACK;
+    music = createAudioPlayer(MUSIC[currentTrackKey] || MUSIC[DEFAULT_TRACK]);
     music.loop = true;
     music.volume = getSettings().musicVolume;
   });
@@ -72,6 +77,9 @@ export const initAudio = async () => {
   SELECT_LADDER.forEach((source, index) => poolFor(`select_${index}`, source));
 
   subscribeToSettings((settings) => {
+    // Before the mute branch: equipping a track while muted must still take
+    // effect, so that unmuting later starts the one that was chosen.
+    setMusicTrack(settings.trackKey);
     if (music) safely(() => { music.volume = settings.musicVolume; });
     if (settings.muted || !settings.music) stopMusic();
     else if (musicWanted) startMusic();
