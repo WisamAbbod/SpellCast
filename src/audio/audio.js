@@ -139,6 +139,42 @@ export const releaseMusicIntent = () => {
   stopMusic();
 };
 
+/**
+ * Swaps the loop without touching the intent.
+ *
+ * player.replace() keeps the player object and resumes only if it was ALREADY
+ * playing - so a swap while muted stays silent, and unmuting afterwards starts
+ * the new track. That is exactly what musicWanted already promises, so there is
+ * no extra branching to get wrong.
+ *
+ * loop and volume are re-applied because on web replace() throws the <audio>
+ * element away and builds a fresh one, losing both (expo-audio's
+ * AudioModule.web.js). On Android the ExoPlayer instance survives and this is a
+ * harmless no-op.
+ *
+ * Also the shop's preview: it calls this directly without saving, then calls it
+ * again with the equipped key on the way out.
+ */
+export const setMusicTrack = (key) => {
+  const wanted = key || DEFAULT_TRACK;
+  // initAudio is deferred behind runAfterInteractions, so a preview can land
+  // first. Record the key and let initAudio read settings for the real choice.
+  if (!music) {
+    currentTrackKey = wanted;
+    return;
+  }
+  if (wanted === currentTrackKey) return;
+
+  currentTrackKey = wanted;
+  safely(() => {
+    music.replace(MUSIC[wanted] || MUSIC[DEFAULT_TRACK]);
+    music.loop = true;
+    music.volume = getSettings().musicVolume;
+  });
+};
+
+export const currentTrack = () => currentTrackKey || DEFAULT_TRACK;
+
 /* ----------------------------------------------------------------- sfx -- */
 
 /** Rises as the word gets longer, so a long trace sounds like it's building. */

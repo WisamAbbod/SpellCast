@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Screen from '../components/Screen.js';
 import Button from '../components/Button.js';
 import Confetti from '../components/Confetti.js';
+import EarnedCard from '../components/EarnedCard.js';
 import { Card } from '../components/Stat.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { GENERATOR_VERSION } from '../config.js';
@@ -54,7 +55,7 @@ const rowLabel = (entry) =>
  * its own opinion about who won, or a tie would be broken twice and
  * differently.
  */
-const SlowResultsScreen = ({ nav, state, config }) => {
+const SlowResultsScreen = ({ nav, state, config, earned }) => {
   const settings = useSettings();
 
   // A game handed over half-built - or not at all - should not take the app down.
@@ -101,6 +102,14 @@ const SlowResultsScreen = ({ nav, state, config }) => {
         ) : (
           <Text style={styles.headline} numberOfLines={2}>{`${winner.name} wins!`}</Text>
         )}
+
+        {/* Undefined for a game finished before stardust shipped, and for the
+            no-config path - EarnedCard renders nothing rather than guessing. */}
+        <EarnedCard
+          earned={earned}
+          style={styles.card}
+          emptyNote="Slow mode tops out at 30 ✦ a day. Come back tomorrow."
+        />
 
         <Card title="Final standings" style={styles.card}>
           <View style={styles.table}>

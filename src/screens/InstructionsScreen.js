@@ -9,6 +9,10 @@ import { space } from '../theme/layout.js';
 import { GAME_DURATION, MIN_WORD_LENGTH } from '../game/rules.js';
 import { MAX_WORD_LENGTH } from '../game/dictionary.js';
 import {
+  DAILY_COMPLETION_BONUS, POINTS_PER_STARDUST, PRACTICE_DAILY_CAP,
+  SLOW_COMPLETION_BONUS, SLOW_WIN_BONUS, STARDUST_GLYPH,
+} from '../game/economy.js';
+import {
   ABILITIES, LONG_WORD_BONUS, LONG_WORD_MIN, MAX_GEMS, MAX_PLAYERS,
   MIN_PLAYERS, POINTS_PER_LEFTOVER_GEM, SLOW_ROUNDS, TURN_SECONDS,
 } from '../game/slow/rules.js';
@@ -65,6 +69,21 @@ const InstructionsScreen = ({ nav }) => (
           {'\n\n'}
           Puzzles change at midnight UTC, which is why they're numbered rather
           than dated. Every past puzzle stays playable from the practice screen.
+        </Text>
+      </Card>
+
+      <Card title="Stardust" style={styles.card}>
+        <Text style={styles.body}>
+          Every round pays stardust: {STARDUST_GLYPH} 1 per{' '}
+          {POINTS_PER_STARDUST} points, plus {DAILY_COMPLETION_BONUS} for
+          finishing the daily, more for the medal you earn, and a lump sum the
+          day your streak reaches 3, 7, 14 or 30.
+          {'\n\n'}
+          Practice pays a quarter as much and stops at {PRACTICE_DAILY_CAP} a
+          day; slow mode pays a flat {SLOW_COMPLETION_BONUS}, plus{' '}
+          {SLOW_WIN_BONUS} if you win. Spend it in the shop on backgrounds and
+          soundtracks — you can preview anything before you buy it, and what you
+          buy is yours for good.
         </Text>
       </Card>
 

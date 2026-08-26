@@ -3,8 +3,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import Screen from '../components/Screen.js';
 import Button from '../components/Button.js';
 import MuteButton from '../components/MuteButton.js';
+import StardustBadge from '../components/StardustBadge.js';
 import { Stat, StatRow } from '../components/Stat.js';
 import { useNow } from '../hooks/useNow.js';
+import { useProfile } from '../hooks/useProfile.js';
 import { colors } from '../theme/colors.js';
 import { fonts } from '../theme/typography.js';
 import { space } from '../theme/layout.js';
@@ -12,17 +14,18 @@ import {
   formatCountdown, msUntilNextPuzzle, puzzleNumber, utcDateKey,
 } from '../game/daily.js';
 import { getDailyRecord } from '../storage/dailyResults.js';
-import { loadProfile } from '../storage/profile.js';
 import { displayedStreak } from '../storage/streak.js';
 
 const MenuScreen = ({ nav }) => {
   const now = useNow(1000);
   const today = utcDateKey(now);
-  const [profile, setProfile] = useState(null);
+  // Subscribed rather than fetched, so the balance and the streak are already
+  // right when a finished round lands back here - and so the badge below and
+  // this screen cannot disagree about what the profile says.
+  const profile = useProfile();
   const [record, setRecord] = useState(null);
 
   const refresh = useCallback(async () => {
-    setProfile(await loadProfile());
     setRecord(await getDailyRecord(today));
   }, [today]);
 
@@ -30,12 +33,13 @@ const MenuScreen = ({ nav }) => {
     refresh();
   }, [refresh]);
 
-  const streak = profile ? displayedStreak(profile.streak, today) : 0;
+  const streak = displayedStreak(profile.streak, today);
   const donetoday = record?.status === 'complete';
 
   return (
     <Screen>
       <View style={styles.topBar}>
+        <StardustBadge onPress={() => nav.push('shop')} />
         <MuteButton />
       </View>
 
@@ -60,7 +64,7 @@ const MenuScreen = ({ nav }) => {
               ? `Next puzzle in ${formatCountdown(msUntilNextPuzzle(now))}`
               : 'One scored attempt · everyone gets the same board'
           }
-          icon="✦"
+          icon="❖"
           onPress={() => nav.push('daily')}
         />
         <Button
@@ -85,6 +89,7 @@ const MenuScreen = ({ nav }) => {
         />
 
         <View style={styles.minor}>
+          <Button label="Shop" variant="ghost" onPress={() => nav.push('shop')} />
           <Button label="How to play" variant="ghost" onPress={() => nav.push('instructions')} />
           <Button label="Settings" variant="ghost" onPress={() => nav.push('settings')} />
         </View>
@@ -97,7 +102,12 @@ const styles = StyleSheet.create({
   // In the flow, not absolutely placed. An absolute child is positioned from
   // the parent's border box, so top: 0 ignored the safe-area padding and put
   // the button up under the notch where it could not be reached.
-  topBar: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: space.sm },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: space.sm,
+  },
   header: { alignItems: 'center', marginTop: space.md, marginBottom: space.xl },
   title: {
     fontFamily: fonts.display,
@@ -115,7 +125,11 @@ const styles = StyleSheet.create({
   },
   stats: { marginBottom: space.xl },
   actions: { flex: 1, justifyContent: 'center', gap: space.md },
-  minor: { flexDirection: 'row', justifyContent: 'center', gap: space.lg, marginTop: space.sm },
+  // Wraps: three ghost buttons no longer fit on one line on a narrow phone.
+  minor: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center',
+    gap: space.lg, marginTop: space.sm,
+  },
 });
 
 export default MenuScreen;

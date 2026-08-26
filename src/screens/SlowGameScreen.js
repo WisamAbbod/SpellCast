@@ -36,6 +36,7 @@ import {
 } from '../game/slow/game.js';
 import { chooseBotWord, planBotTurn } from '../game/slow/bot.js';
 import { slowLetterValue } from '../game/slow/scoring.js';
+import { finishSlowGame } from '../session/round.js';
 
 /**
  * Slow mode: the turn-based game.
@@ -364,7 +365,14 @@ const SlowGameScreen = ({ nav, config }) => {
       finishing.current = true;
       clearTimers();
       playGameOver();
-      later(() => nav.replace('slowResults', { state: game, config }), 600);
+
+      // Paid here rather than on the results screen, because finishing.current
+      // already guarantees this runs once per game - the results screen remounts
+      // if somebody navigates back to it, and would pay again.
+      const award = finishSlowGame(game); // never rejects
+      later(() => {
+        award.then((earned) => nav.replace('slowResults', { state: game, config, earned }));
+      }, 600);
       return;
     }
 

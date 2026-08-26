@@ -28,6 +28,7 @@ npm start        # scan the QR code with Expo Go
 | **Combos**       | Words in quick succession build a multiplier up to 2.5×.                 |
 | **Par**          | Scored against the ten best words on the board, not an arbitrary target. |
 | **Stats**        | History, best word, average against par, medal bands.                    |
+| **Stardust**     | Earned every round, spent on backgrounds and soundtracks in the shop.    |
 | **Sharing**      | A Wordle-style result you can post without spoiling the board.           |
 | **Leaderboard**  | Local by default. Add two keys for a global daily board.                 |
 
@@ -129,6 +130,39 @@ The results screen leads with **"you found 6 of the 10 best words"** and then
 shows you the ones you missed — which is the part that makes you want to play
 again.
 
+### Stardust is earned, and it is not a theme system
+
+A round pays **1 ✦ per 100 points**, plus 10 for finishing the daily, 3–20 for
+the medal, and 15–200 the day a streak reaches 3, 7, 14 or 30. A typical silver
+daily is 22 ✦. Practice pays a quarter rate and stops at 15 ✦ a day; slow mode
+pays a flat 8, plus 7 for winning, capped at 30. Both caps exist because
+practice is unlimited — without them the daily would stop mattering. The whole
+catalog is 2,550 ✦: roughly a season of daily play, and about six weeks for
+somebody who plays everything.
+
+The rules live in [`src/game/economy.js`](src/game/economy.js), which imports
+nothing, so the rates are tested under plain node. Caps are passed **in** as a
+`remaining` number rather than read from state, which keeps every function a
+pure sum. The payout rides the **same `saveProfile` write** as the round's
+statistics, so a round can never bank the score and lose the stardust; and the
+calculation sits in its own `try`, so a bug in new economy code cannot cost
+somebody their streak or their leaderboard row.
+
+Backgrounds are deliberately **not** a theme system. Roughly twenty-one
+components call `StyleSheet.create` at module scope with `colors.*` baked in, so
+they cannot react to a runtime swap at all. Only the four things that actually
+draw the backdrop are themed — the gradient, an alpha overlay, an SVG scenery
+band and the particle field — and all four live in
+[`Screen.js`](src/components/Screen.js). Everything else keeps assuming a dark
+backdrop, which is why every catalog entry is required to stay below a relative
+luminance of 0.18, and why `tests/economy.test.js` asserts that rather than
+trusting it. The same test checks every SVG path for truncation: a malformed
+`d` draws nothing and reports nothing.
+
+`Screen` takes a `backgroundKey` prop that overrides the equipped choice without
+persisting it. That one line is the whole of the shop's preview — and why
+backing out of the shop reverts for free.
+
 ## Project layout
 
 ```
@@ -137,12 +171,13 @@ src/game/         board generation, solver, scoring, the daily calendar, swipe
                   what lets the whole game engine be tested under plain node.
 src/game/slow/    slow mode: its own scoring, its own board, and the turn-based
                   state machine — pure reducers, state in and state out.
-src/storage/      settings, profile, daily records, streaks, the slow-mode roster
+src/storage/      settings, profile, wallet, daily records, streaks, slow roster
 src/leaderboard/  one contract, two implementations
-src/screens/      menu · daily · practice · game · results · stats · settings · help
-                  slow setup · slow game · slow results
-src/components/   board, tiles, swipe trail, buttons, sheets, confetti
-src/theme/        colours, type, responsive board geometry
+src/screens/      menu · daily · practice · game · results · stats · settings · shop
+                  help · slow setup · slow game · slow results
+src/components/   board, tiles, swipe trail, buttons, sheets, confetti, the
+                  particle field and the SVG scenery behind every screen
+src/theme/        colours, type, responsive board geometry, the background catalog
 tools/            regenerate the dictionary and the audio, check imports
 tests/            one suite per module
 ```
@@ -151,7 +186,7 @@ tests/            one suite per module
 
 ```bash
 npm start                  # Expo dev server
-npm test                   # 327 checks, 11 suites, no framework, no dev deps
+npm test                   # 415 checks, 12 suites, no framework, no dev deps
 npm run check              # verifies every local import resolves
 npm run sim:slow           # play a whole slow-mode game out in the terminal
 npm run build:dictionary   # re-download and rebuild both word tiers
@@ -175,9 +210,9 @@ it ever reached a phone.
 
 Every sound is **generated from scratch** by
 [`tools/generate_audio.js`](tools/generate_audio.js) — a dependency-free
-synthesiser that writes 14 PCM WAV files: a seamless 38-second ambient loop,
-six rising select blips, and effects for words, combos, the final countdown and
-game over. No samples, no licences, about 1.8 MB.
+synthesiser that writes 17 PCM WAV files: four seamless music loops, six rising
+select blips, and effects for words, combos, the final countdown and game over.
+No samples, no licences, about 3.4 MB.
 
 The loop is eight bars — Am F C G Dm Am F E — and **ends on the dominant**, so
 the point where it restarts is a perfect cadence resolving into the Am it opens
@@ -187,6 +222,15 @@ nothing lines up to imply a shorter loop. Notes that run past the end wrap round
 and add into the beginning, which is what makes the seam inaudible — measured,
 the jump across the loop point is smaller than the largest ordinary
 sample-to-sample step inside the file.
+
+The three unlockable tracks — Pulse, Lantern and Fathom — follow the same shape
+with shorter bars, and render at **12kHz rather than 22.05kHz**. Three more
+full-rate loops would have added 5MB; at 12kHz they add 1.6MB. A 6kHz Nyquist is
+safe here only because they use nothing but sine and triangle, whose partials
+fall off as 1/n² — the loudest thing that can alias is a triangle's 7th harmonic
+at about 2%. A square or saw would not be safe (its 7th is 14%), which is why
+none of them use one, and why "driving" is done with tempo and envelope instead
+of with a waveform.
 
 To use your own instead, drop a file with the same name into `assets/audio/`.
 Nothing in the app cares how it was made.
