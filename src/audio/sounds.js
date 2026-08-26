@@ -24,4 +24,16 @@ export const SOUNDS = {
   start: require('../../assets/audio/start.wav'),
 };
 
-export const MUSIC = require('../../assets/audio/music.wav');
+/**
+ * Every music track, keyed. Names, prices and blurbs live in tracks.js, which
+ * is pure data and therefore testable; Metro needs literal paths here.
+ *
+ * music.wav keeps its original filename so the promise above still holds for
+ * the default track.
+ */
+export const MUSIC = {
+  drift: require('../../assets/audio/music.wav'),
+  pulse: require('../../assets/audio/pulse.wav'),
+  lantern: require('../../assets/audio/lantern.wav'),
+  fathom: require('../../assets/audio/fathom.wav'),
+};

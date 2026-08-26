@@ -28,7 +28,15 @@ export const colors = {
   tileSelected: '#7C5CFF',
   tileWord: '#FFD166', // 2x word tile
   tileLetter: '#4ADEDE', // double / triple letter tile
-  gem: '#FF7BD5', // the jewels slow mode pays abilities with
+  gem: '#FF7BD5', // the jewels slow mode pays abilities with, per match, never saved
+
+  // Stardust: the persistent currency. Nearly white with a lilac cast, so it
+  // cannot be mistaken for the saturated pink gem above, the gold medal, or the
+  // cyan accent - which matters, because gems and stardust turn up on adjacent
+  // screens and mean completely different things.
+  stardust: '#E2D6FF',
+  stardustDim: 'rgba(226, 214, 255, 0.16)',
+  stardustEdge: 'rgba(226, 214, 255, 0.38)',
 
   // The swipe trail. Drawn ABOVE the tiles with alpha, so it stays visible -
   // underneath opaque tiles only the sliver in the gutter ever showed.

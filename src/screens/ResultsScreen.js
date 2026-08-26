@@ -9,7 +9,9 @@ import { colors, medalFor } from '../theme/colors.js';
 import { fonts } from '../theme/typography.js';
 import { radius, space } from '../theme/layout.js';
 import { formatShareText, parBlocks } from '../game/share.js';
+import { STARDUST_GLYPH } from '../game/economy.js';
 import { getLeaderboard } from '../leaderboard/index.js';
+import EarnedCard from '../components/EarnedCard.js';
 
 /**
  * What the round was worth.
@@ -20,7 +22,7 @@ import { getLeaderboard } from '../leaderboard/index.js';
  */
 const ResultsScreen = ({ nav, outcome, board, seed, cellSeed, dateKey, mode }) => {
   const settings = useSettings();
-  const { result, streak, submitted } = outcome;
+  const { result, streak, submitted, earned } = outcome;
   const medal = medalFor(result.parPercent);
   const [rank, setRank] = useState(null);
 
@@ -104,6 +106,16 @@ const ResultsScreen = ({ nav, outcome, board, seed, cellSeed, dateKey, mode }) =
             </StatRow>
           </Card>
         )}
+
+        <EarnedCard
+          earned={earned}
+          style={styles.card}
+          emptyNote={
+            isDaily
+              ? `Today's ${STARDUST_GLYPH} was already paid for this puzzle.`
+              : `Practice tops out at 15 ${STARDUST_GLYPH} a day. Come back tomorrow.`
+          }
+        />
 
         <Card title="The ten best words on this board" style={styles.card}>
           <View style={styles.words}>

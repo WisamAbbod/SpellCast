@@ -5,18 +5,44 @@
  *   node tools/generate_audio.js
  *
  * Original synthesis, no samples, no dependencies, no licences to worry about.
- * Everything is 16-bit mono PCM at 22.05kHz, which keeps the whole set near
- * 800KB. To replace a sound with your own, drop a file with the same name into
- * assets/audio/ - nothing in the app cares how it was made.
+ * Effects are 16-bit mono PCM at 22.05kHz; the unlockable music tracks drop to
+ * 12kHz (see withSampleRate below). To replace a sound with your own, drop a
+ * file with the same name into assets/audio/ - nothing in the app cares how it
+ * was made.
  *
- * The music loop is seamless: notes that run past the end of the buffer wrap
+ * The music loops are seamless: notes that run past the end of the buffer wrap
  * around and add into the beginning, so the last sample flows into the first.
  */
 const fs = require('fs');
 const path = require('path');
 
-const SAMPLE_RATE = 22050;
+let SAMPLE_RATE = 22050;
 const OUT_DIR = path.join(__dirname, '..', 'assets', 'audio');
+
+/**
+ * Renders one builder at a different rate.
+ *
+ * Music is four fifths of the shipped audio, and three more tracks at 22.05kHz
+ * would have added 5MB. Every helper reads SAMPLE_RATE at call time, so swapping
+ * it around a single builder is enough - and the effects keep their full rate.
+ *
+ * 12kHz gives a 6kHz Nyquist. The new tracks use only sine and triangle, whose
+ * partials fall off as 1/n^2: the loudest thing that can alias is a triangle's
+ * 7th harmonic at about 2% amplitude. A square or saw would NOT be safe here -
+ * its 7th is 14% - which is why none of them use one, and why "driving" is done
+ * with tempo and envelope instead of with a waveform.
+ */
+const withSampleRate = (rate, build) => {
+  const previous = SAMPLE_RATE;
+  SAMPLE_RATE = rate;
+  try {
+    build();
+  } finally {
+    SAMPLE_RATE = previous;
+  }
+};
+
+const MUSIC_RATE = 12000;
 
 /* ------------------------------------------------------------- helpers -- */
 
@@ -95,19 +121,25 @@ const addNote = (target, {
   }
 };
 
-const addNoise = (target, { start = 0, duration, gain = 0.2, decay = 8, rng, sweep = 0 }) => {
+/** @param wrap as in addNote - needed for a swell that crosses the loop point. */
+const addNoise = (
+  target,
+  { start = 0, duration, gain = 0.2, decay = 8, rng, sweep = 0, wrap = false },
+) => {
   const total = Math.round(duration * SAMPLE_RATE);
   const startSample = Math.round(start * SAMPLE_RATE);
   let smoothed = 0;
 
   for (let i = 0; i < total; i++) {
     const index = startSample + i;
-    if (index >= target.length) break;
+    if (index >= target.length && !wrap) break;
     const t = i / SAMPLE_RATE;
     // A one-pole low-pass whose cutoff sweeps: cheap "whoosh".
     const alpha = 0.02 + (sweep ? (i / total) * sweep : 0.25);
     smoothed += ((rng() * 2 - 1) - smoothed) * Math.min(1, alpha);
-    target[index] += smoothed * Math.exp(-t * decay) * gain;
+    // With wrap off and index < length this is just index, so every existing
+    // effect renders byte-identically.
+    target[index % target.length] += smoothed * Math.exp(-t * decay) * gain;
   }
 };
 
@@ -176,6 +208,9 @@ const NOTE = {
   C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.0,
   C6: 1046.5, D6: 1174.66, E6: 1318.5,
   Gs3: 207.65, Gs4: 415.3,
+  // Added for the unlockable tracks: Bb for Fathom's Dm-Bb-Gm, Cs for its
+  // dominant A major, D2 for its drone.
+  D2: 73.42, As2: 116.54, As3: 233.08, As4: 466.16, Cs4: 277.18, Cs5: 554.37,
 };
 
 /* --------------------------------------------------------------- sfx -- */
@@ -403,6 +438,239 @@ const buildMusic = () => {
   writeWav('music.wav', normalise(samples, 0.68));
 };
 
+/* ---------------------------------------------- unlockable soundtracks -- */
+
+/*
+ * Three more loops, bought with stardust in the shop.
+ *
+ * All three follow buildMusic's shape - eight bars, a rhythm per bar, wrap on
+ * every note, and a final chord that is the dominant of the first so the loop
+ * point lands as a cadence rather than a jump. What differs is bar length,
+ * register and density, which is where their character actually comes from.
+ *
+ * Shorter bars than Drift's 4.8s, so they cost a third of the bytes.
+ */
+
+/** 19.2s. Am F G Am / Dm F G E, ends on E. Fast, dense, four-on-the-floor. */
+const buildPulse = () => {
+  const barLength = 2.4;
+  const bars = 8;
+  const steps = 16;
+  const samples = buffer(barLength * bars);
+  const rng = mulberry32(5150);
+
+  const progression = [
+    { pad: [NOTE.A3, NOTE.C4, NOTE.E4], bass: NOTE.A2, arp: [NOTE.A4, NOTE.C5, NOTE.E5, NOTE.C5] },
+    { pad: [NOTE.F3, NOTE.A3, NOTE.C4], bass: NOTE.F2, arp: [NOTE.F4, NOTE.A4, NOTE.C5, NOTE.A4] },
+    { pad: [NOTE.G3, NOTE.B3, NOTE.D4], bass: NOTE.G2, arp: [NOTE.G4, NOTE.B4, NOTE.D5, NOTE.B4] },
+    { pad: [NOTE.A3, NOTE.C4, NOTE.E4], bass: NOTE.A2, arp: [NOTE.E5, NOTE.C5, NOTE.A4, NOTE.C5] },
+    { pad: [NOTE.D4, NOTE.F4, NOTE.A4], bass: NOTE.D3, arp: [NOTE.D5, NOTE.F5, NOTE.A5, NOTE.F5] },
+    { pad: [NOTE.F3, NOTE.A3, NOTE.C4], bass: NOTE.F2, arp: [NOTE.C5, NOTE.A4, NOTE.F4, NOTE.A4] },
+    { pad: [NOTE.G3, NOTE.B3, NOTE.D4], bass: NOTE.G2, arp: [NOTE.D5, NOTE.B4, NOTE.G4, NOTE.B4] },
+    { pad: [NOTE.E3, NOTE.Gs3, NOTE.B3], bass: NOTE.E2, arp: [NOTE.B4, NOTE.Gs4, NOTE.E5, NOTE.Gs4] },
+  ];
+
+  // Sixteenths. The gaps are the groove - a fully filled bar reads as a drone
+  // however fast it is.
+  const rhythms = [
+    [1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1],
+    [1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1],
+    [1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1],
+    [1, 0, 1, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 1, 0],
+    [1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1],
+    [1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0],
+    [1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1],
+    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0],
+  ];
+
+  progression.forEach((chord, bar) => {
+    const start = bar * barLength;
+
+    chord.pad.forEach((freq, voice) => {
+      addNote(samples, {
+        start, duration: barLength + 0.7, freq, wave: 'triangle',
+        gain: 0.05, attack: 0.5, release: 0.9, wrap: true,
+        vibratoHz: 0.2 + voice * 0.05, vibratoDepth: 0.6, harmonics: [1, 0.12],
+      });
+    });
+
+    // Four to the bar, with a short envelope so it thumps rather than hums.
+    for (let beat = 0; beat < 4; beat++) {
+      addNote(samples, {
+        start: start + beat * (barLength / 4), duration: 0.34, freq: chord.bass,
+        wave: 'sine', gain: 0.2, attack: 0.006, release: 0.16, decay: 5.5, wrap: true,
+      });
+    }
+
+    rhythms[bar].forEach((sounds, step) => {
+      if (!sounds) return;
+      addNote(samples, {
+        start: start + step * (barLength / steps),
+        duration: 0.3,
+        freq: chord.arp[step % chord.arp.length],
+        wave: 'triangle',
+        gain: 0.05 + rng() * 0.016,
+        attack: 0.003, release: 0.13, decay: 8, wrap: true,
+        harmonics: [1, 0.2, 0.07],
+      });
+    });
+  });
+
+  writeWav('pulse.wav', normalise(samples, 0.7));
+};
+
+/** 25.6s. C G Am Em / F C Dm G, ends on G. Major, unhurried, bell-toned. */
+const buildLantern = () => {
+  const barLength = 3.2;
+  const bars = 8;
+  const steps = 8;
+  const samples = buffer(barLength * bars);
+  const rng = mulberry32(31415);
+
+  const progression = [
+    { pad: [NOTE.C4, NOTE.E4, NOTE.G4], bass: NOTE.C3, arp: [NOTE.C5, NOTE.E5, NOTE.G5, NOTE.E5] },
+    { pad: [NOTE.G3, NOTE.B3, NOTE.D4], bass: NOTE.G2, arp: [NOTE.G4, NOTE.B4, NOTE.D5, NOTE.B4] },
+    { pad: [NOTE.A3, NOTE.C4, NOTE.E4], bass: NOTE.A2, arp: [NOTE.A4, NOTE.C5, NOTE.E5, NOTE.C5] },
+    { pad: [NOTE.E3, NOTE.G3, NOTE.B3], bass: NOTE.E2, arp: [NOTE.E5, NOTE.B4, NOTE.G4, NOTE.B4] },
+    { pad: [NOTE.F3, NOTE.A3, NOTE.C4], bass: NOTE.F2, arp: [NOTE.F4, NOTE.A4, NOTE.C5, NOTE.A4] },
+    { pad: [NOTE.C4, NOTE.E4, NOTE.G4], bass: NOTE.C3, arp: [NOTE.G5, NOTE.E5, NOTE.C5, NOTE.E5] },
+    { pad: [NOTE.D4, NOTE.F4, NOTE.A4], bass: NOTE.D3, arp: [NOTE.D5, NOTE.F5, NOTE.A5, NOTE.F5] },
+    { pad: [NOTE.G3, NOTE.B3, NOTE.D4], bass: NOTE.G2, arp: [NOTE.D5, NOTE.B4, NOTE.G4, NOTE.B4] },
+  ];
+
+  // Sparse on purpose. Warmth is space, not notes.
+  const rhythms = [
+    [1, 0, 0, 1, 0, 1, 0, 0],
+    [1, 0, 1, 0, 0, 1, 0, 0],
+    [1, 0, 0, 1, 0, 0, 1, 0],
+    [1, 0, 1, 0, 0, 1, 0, 1],
+    [1, 0, 0, 1, 0, 1, 0, 0],
+    [1, 1, 0, 0, 1, 0, 1, 0],
+    [1, 0, 0, 1, 0, 1, 0, 0],
+    [1, 0, 0, 0, 1, 0, 0, 0],
+  ];
+
+  progression.forEach((chord, bar) => {
+    const start = bar * barLength;
+
+    // A very slow attack: each chord fades up rather than arriving.
+    chord.pad.forEach((freq, voice) => {
+      addNote(samples, {
+        start, duration: barLength + 1.6, freq, wave: 'triangle',
+        gain: 0.078, attack: 1.4, release: 1.9, wrap: true,
+        vibratoHz: 0.12 + voice * 0.03, vibratoDepth: 0.5, harmonics: [1, 0.14],
+      });
+    });
+
+    addNote(samples, {
+      start, duration: barLength * 0.8, freq: chord.bass, wave: 'sine',
+      gain: 0.15, attack: 0.4, release: 0.9, wrap: true,
+    });
+
+    rhythms[bar].forEach((sounds, step) => {
+      if (!sounds) return;
+      // Bells: a long exponential tail and a strong second partial.
+      addNote(samples, {
+        start: start + step * (barLength / steps),
+        duration: 2.2,
+        freq: chord.arp[step % chord.arp.length],
+        wave: 'sine',
+        gain: 0.055 + rng() * 0.02,
+        attack: 0.005, release: 1.2, decay: 4.5, wrap: true,
+        harmonics: [1, 0.5, 0.18],
+      });
+    });
+  });
+
+  writeWav('lantern.wav', normalise(samples, 0.66));
+};
+
+/** 22.4s. Dm Dm Bb A / Gm Dm Bb A, ends on A. A drone, and room above it. */
+const buildFathom = () => {
+  const barLength = 2.8;
+  const bars = 8;
+  const steps = 8;
+  const total = barLength * bars;
+  const samples = buffer(total);
+  const rng = mulberry32(20000);
+
+  const progression = [
+    { pad: [NOTE.D4, NOTE.F4, NOTE.A4], bass: NOTE.D3, arp: [NOTE.D5, NOTE.A4, NOTE.F5, NOTE.A5] },
+    { pad: [NOTE.D4, NOTE.F4, NOTE.A4], bass: NOTE.D3, arp: [NOTE.F5, NOTE.D5, NOTE.A4, NOTE.D5] },
+    { pad: [NOTE.As3, NOTE.D4, NOTE.F4], bass: NOTE.As2, arp: [NOTE.As4, NOTE.F5, NOTE.D5, NOTE.F5] },
+    { pad: [NOTE.Cs4, NOTE.E4, NOTE.A4], bass: NOTE.A2, arp: [NOTE.A4, NOTE.Cs5, NOTE.E5, NOTE.Cs5] },
+    { pad: [NOTE.G3, NOTE.As3, NOTE.D4], bass: NOTE.G2, arp: [NOTE.G4, NOTE.As4, NOTE.D5, NOTE.As4] },
+    { pad: [NOTE.D4, NOTE.F4, NOTE.A4], bass: NOTE.D3, arp: [NOTE.A5, NOTE.F5, NOTE.D5, NOTE.F5] },
+    { pad: [NOTE.As3, NOTE.D4, NOTE.F4], bass: NOTE.As2, arp: [NOTE.D5, NOTE.As4, NOTE.F5, NOTE.As4] },
+    { pad: [NOTE.Cs4, NOTE.E4, NOTE.A4], bass: NOTE.A2, arp: [NOTE.Cs5, NOTE.A4, NOTE.E5, NOTE.A4] },
+  ];
+
+  // Three or four hits a bar. The tension is in what is missing.
+  const rhythms = [
+    [1, 0, 0, 1, 0, 0, 1, 0],
+    [1, 0, 0, 0, 1, 0, 0, 1],
+    [1, 0, 1, 0, 0, 1, 0, 0],
+    [1, 0, 0, 1, 0, 0, 1, 0],
+    [1, 0, 0, 1, 0, 1, 0, 0],
+    [1, 0, 1, 0, 0, 1, 0, 0],
+    [1, 0, 0, 1, 0, 0, 1, 1],
+    [1, 0, 0, 0, 1, 0, 0, 0],
+  ];
+
+  // The drone: one note under the entire loop, wrapping through the loop point
+  // so there is literally nothing to hear at the seam.
+  addNote(samples, {
+    start: 0, duration: total + 2, freq: NOTE.D2, wave: 'sine',
+    gain: 0.22, attack: 2.2, release: 2.4, wrap: true,
+    vibratoHz: 0.07, vibratoDepth: 0.4,
+  });
+
+  progression.forEach((chord, bar) => {
+    const start = bar * barLength;
+
+    chord.pad.forEach((freq, voice) => {
+      addNote(samples, {
+        start, duration: barLength + 1.5, freq, wave: 'triangle',
+        gain: 0.058, attack: 1.1, release: 1.7, wrap: true,
+        vibratoHz: 0.1 + voice * 0.035, vibratoDepth: 0.9, harmonics: [1, 0.18],
+      });
+    });
+
+    addNote(samples, {
+      start, duration: barLength * 0.7, freq: chord.bass, wave: 'sine',
+      gain: 0.12, attack: 0.45, release: 0.8, wrap: true,
+    });
+
+    rhythms[bar].forEach((sounds, step) => {
+      if (!sounds) return;
+      addNote(samples, {
+        start: start + step * (barLength / steps),
+        duration: 1.5,
+        freq: chord.arp[step % chord.arp.length],
+        wave: 'sine',
+        gain: 0.048 + rng() * 0.018,
+        attack: 0.02, release: 0.9, decay: 3.6, wrap: true,
+        harmonics: [1, 0.22, 0.08],
+      });
+    });
+  });
+
+  // Two swells. The second starts near the end and wraps, so the loop point is
+  // covered by something already in motion - which is what addNoise's new wrap
+  // exists for.
+  addNote(samples, {
+    start: barLength * 3.4, duration: barLength * 2, freq: NOTE.A3, wave: 'triangle',
+    gain: 0.03, attack: barLength * 0.9, release: barLength * 1.1, wrap: true,
+    vibratoHz: 0.13, vibratoDepth: 1.4,
+  });
+  addNoise(samples, {
+    start: total - barLength * 0.8, duration: barLength * 1.6,
+    gain: 0.024, decay: 0.7, sweep: 0.12, rng, wrap: true,
+  });
+
+  writeWav('fathom.wav', normalise(samples, 0.7));
+};
+
 /* ---------------------------------------------------------------- run -- */
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -415,6 +683,12 @@ buildGameOver();
 buildShuffle();
 buildStart();
 buildMusic();
+
+// The unlockables render at 12kHz. buildMusic stays at the full rate so its
+// output is unchanged - Drift is what everybody already has.
+withSampleRate(MUSIC_RATE, buildPulse);
+withSampleRate(MUSIC_RATE, buildLantern);
+withSampleRate(MUSIC_RATE, buildFathom);
 
 const total = fs
   .readdirSync(OUT_DIR)

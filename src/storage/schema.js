@@ -19,6 +19,12 @@ export const DEFAULT_SETTINGS = {
   musicVolume: 0.45,
   soundVolume: 0.8,
   displayName: '',
+
+  // Which cosmetics are equipped. Ownership lives on the profile; this is only
+  // the choice, so it belongs here with the other device preferences - and it
+  // means Screen.js can read it from the subscription it already has.
+  backgroundKey: 'nebula',
+  trackKey: 'drift',
 };
 
 export const DEFAULT_PROFILE = {
@@ -39,6 +45,22 @@ export const DEFAULT_PROFILE = {
   practice: { played: 0, totalScore: 0, bestScore: 0, totalWords: 0 },
   perLength: {},
   lastSeenPuzzle: null,
+
+  // Stardust: the persistent currency. NOT slow mode's gems, which are minted
+  // and spent inside a single match and never leave it (src/game/slow/rules.js).
+  // balance = spendable now, lifetime = ever earned, spent = ever spent.
+  // The invariant balance + spent === lifetime is asserted in the tests.
+  wallet: { balance: 0, lifetime: 0, spent: 0 },
+
+  // Bought cosmetics, by catalog kind. Exactly one level of nesting: withDefaults
+  // replaces depth-2 arrays wholesale, which is what we want. A THIRD level here
+  // would silently stop merging.
+  unlocks: { backgrounds: [], tracks: [] },
+
+  // One UTC day of earning, so the practice and slow caps cannot be farmed by
+  // replaying. The daily payout needs no counter - it is guarded by the daily
+  // record's own completion flag.
+  earn: { date: null, practice: 0, slow: 0 },
 };
 
 export const DEFAULT_DAILY_RECORD = {
