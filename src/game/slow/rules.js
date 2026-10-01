@@ -15,7 +15,10 @@ export const MAX_PLAYERS = 6;
 
 /** Turn clock, only used when the host switches it on. */
 export const TURN_SECONDS = 30;
-export const TURN_EXTEND_SECONDS = 15;
+// A gem RESETS the clock to a full turn rather than adding a fixed amount, so
+// the move is worth most when it is needed most. Still capped per turn, or a
+// gem-rich player could stall a table forever. ('extend' remains the move's
+// name: it is in the online move log of every game already played.)
 export const MAX_EXTENSIONS_PER_TURN = 2;
 
 /** Words this long or longer earn a flat bonus, added after the word multiplier. */
@@ -24,6 +27,11 @@ export const LONG_WORD_BONUS = 10;
 
 /** Gems are capped, so hoarding has a ceiling and spending stays worthwhile. */
 export const MAX_GEMS = 10;
+/**
+ * Everyone opens with three, as Discord's SpellCast did: enough for a shuffle
+ * or a swap on a board nobody can see into, before a single gem tile is used.
+ */
+export const STARTING_GEMS = 3;
 /** Every gem still held when the game ends is worth this many points. */
 export const POINTS_PER_LEFTOVER_GEM = 1;
 
@@ -31,7 +39,7 @@ export const ABILITIES = {
   shuffle: { key: 'shuffle', label: 'Shuffle', cost: 1, icon: '⇄', blurb: 'Rearrange every letter' },
   swap: { key: 'swap', label: 'Swap', cost: 3, icon: '⇅', blurb: 'Replace one letter' },
   hint: { key: 'hint', label: 'Hint', cost: 4, icon: '✦', blurb: 'Reveal a word' },
-  extend: { key: 'extend', label: '+15s', cost: 1, icon: '⏱', blurb: 'Buy more time' },
+  extend: { key: 'extend', label: 'Reset', cost: 1, icon: '⏱', blurb: 'Reset the turn timer' },
 };
 
 export const ABILITY_ORDER = ['shuffle', 'swap', 'hint'];

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  InteractionManager,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +12,8 @@ import Board from '../components/Board.js';
 import Button from '../components/Button.js';
 import Sheet from '../components/Sheet.js';
 import Confetti from '../components/Confetti.js';
-import MuteButton from '../components/MuteButton.js';
+import MusicButton from '../components/MusicButton.js';
+import Mascot from '../components/Mascot.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useCountdown } from '../hooks/useCountdown.js';
 import { useBoardLayout, radius, space } from '../theme/layout.js';
@@ -36,12 +36,14 @@ import {
   SHUFFLES_PER_ROUND, SHUFFLE_COOLDOWN_MS,
 } from '../game/rules.js';
 import { buildResult, finishRound } from '../session/round.js';
+import { runWhenIdle } from '../session/idle.js';
+import { gazeForCell, moodForRound, moodForWord } from '../game/mascot.js';
 import { checkpointDaily, startDailyAttempt } from '../storage/dailyResults.js';
 
 const CHECKPOINT_MS = 5000;
 
 /**
- * A round of SpellCast.
+ * A round of Spacewrite.
  *
  * Params: { mode: 'daily' | 'practice', dateKey, seed, cellSeed, resume }
  *
@@ -64,6 +66,11 @@ const GameScreen = ({ nav, mode = 'practice', dateKey, seed, cellSeed, resume })
   const [feedback, setFeedback] = useState(null);
   const [popKeys, setPopKeys] = useState({});
   const [burst, setBurst] = useState(0);
+  const [mascotReaction, setMascotReaction] = useState(null);
+  const [boardSpace, setBoardSpace] = useState(null);
+  const react = useCallback((mood) => {
+    setMascotReaction((previous) => ({ mood, key: (previous ? previous.key : 0) + 1 }));
+  }, []);
   const [combo, setCombo] = useState(0);
   const [shufflesLeft, setShufflesLeft] = useState(SHUFFLES_PER_ROUND);
   const [shuffleReadyAt, setShuffleReadyAt] = useState(0);
@@ -92,7 +99,7 @@ const GameScreen = ({ nav, mode = 'practice', dateKey, seed, cellSeed, resume })
 
     // Two frames after the transition settles, so the screen has painted before
     // the generator takes the thread.
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = runWhenIdle(() => {
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
           const started = Date.now();
@@ -214,11 +221,13 @@ const GameScreen = ({ nav, mode = 'practice', dateKey, seed, cellSeed, resume })
       if (foundRef.current.includes(word)) {
         flash(`${word} already found`);
         playInvalid();
+        react('oops');
         return;
       }
       if (!isValidWord(word)) {
         flash(`${word} isn't a word`);
         playInvalid();
+        react('oops');
         return;
       }
 
@@ -261,9 +270,10 @@ const GameScreen = ({ nav, mode = 'practice', dateKey, seed, cellSeed, resume })
       });
 
       playWord(scored.combo);
+      react(moodForWord({ length: word.length, chain }));
       if (word.length >= 6 || scored.usedWordMultiplier) setBurst((value) => value + 1);
     },
-    [boardData, bonus, flash, paused, running],
+    [boardData, bonus, flash, paused, running, react],
   );
 
   const swipe = useSwipeSelection({
@@ -287,9 +297,32 @@ const GameScreen = ({ nav, mode = 'practice', dateKey, seed, cellSeed, resume })
     setShuffleReadyAt(Date.now() + SHUFFLE_COOLDOWN_MS);
     setShuffleIndex((index) => index + 1);
     playShuffle();
-  }, [shuffleReadyAt, shufflesLeft]);
+    react('dizzy'); // the board spins, so does it
+  }, [shuffleReadyAt, shufflesLeft, react]);
 
   const shuffleReady = shufflesLeft > 0 && Date.now() >= shuffleReadyAt;
+
+  /*
+   * The astronaut floats in the space between the word bar and the board - on
+   * most phones there is ~100px of it doing nothing. Sized from what is really
+   * there, measured, so it never overlaps a tile; on a screen with no room it
+   * drops back to a small one in the footer.
+   */
+  const band = boardSpace ? (boardSpace.height - layout.frameWidth) / 2 : 0;
+  const astronautSize = Math.min(104, Math.floor(band - 4));
+  const astronautAbove = astronautSize >= 52;
+
+  // Its eyes follow your finger across the board.
+  const lastCell = swipe.path.length ? swipe.path[swipe.path.length - 1] : null;
+  const gaze = useMemo(
+    () => (lastCell ? gazeForCell(lastCell) : null),
+    [lastCell],
+  );
+  const astronautMood = moodForRound({
+    secondsLeft,
+    running: running && !paused,
+    tracing: swipe.path.length > 0,
+  });
 
   /* ------------------------------------------------------------- view -- */
 
@@ -339,7 +372,7 @@ const GameScreen = ({ nav, mode = 'practice', dateKey, seed, cellSeed, resume })
           <Text style={styles.pauseIcon}>❚❚</Text>
         </Pressable>
 
-        <MuteButton size={44} />
+        <MusicButton size={44} />
 
         <View style={styles.hudCenter}>
           <Text style={[styles.timer, critical && styles.timerCritical]}>
@@ -387,7 +420,20 @@ const GameScreen = ({ nav, mode = 'practice', dateKey, seed, cellSeed, resume })
         )}
       </View>
 
-      <View style={styles.boardArea} {...swipe.panHandlers}>
+      <View
+        style={styles.boardArea}
+        onLayout={(event) => setBoardSpace(event.nativeEvent.layout)}
+        {...swipe.panHandlers}
+      >
+        {astronautAbove && (
+          <Mascot
+            size={astronautSize}
+            mood={astronautMood}
+            reaction={mascotReaction}
+            lookAt={gaze}
+            style={[styles.astronaut, { top: Math.max(0, (band - astronautSize) / 2) }]}
+          />
+        )}
         <Board
           board={boardData.board}
           layout={layout}
@@ -412,6 +458,11 @@ const GameScreen = ({ nav, mode = 'practice', dateKey, seed, cellSeed, resume })
           <Text style={styles.shuffleIcon}>⇄</Text>
           <Text style={styles.shuffleLabel}>{shufflesLeft}</Text>
         </Pressable>
+
+        {/* Only when the space above the board is too short for it. */}
+        {!astronautAbove && (
+          <Mascot size={48} mood={astronautMood} reaction={mascotReaction} lookAt={gaze} />
+        )}
 
         <View style={styles.foundArea}>
           <Text style={styles.foundCount}>
@@ -510,6 +561,8 @@ const styles = StyleSheet.create({
   hint: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 13 },
 
   boardArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  // Off to the right, so it never sits between the traced word and the board.
+  astronaut: { position: 'absolute', right: space.md },
 
   footer: {
     flexDirection: 'row',

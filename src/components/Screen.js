@@ -80,12 +80,16 @@ const Screen = ({
       <View
         style={[
           styles.content,
-          padded && styles.padded,
           {
             paddingTop: (edges.top ? insets.top : 0) + (padded ? space.md : 0),
             paddingBottom: (edges.bottom ? insets.bottom : 0) + (padded ? space.md : 0),
-            paddingLeft: insets.left,
-            paddingRight: insets.right,
+            // The side margin is added here, not as paddingHorizontal: React
+            // Native lets a single-edge padding beat paddingHorizontal whatever
+            // the order, so `paddingLeft: insets.left` (0 in portrait) was
+            // silently cancelling the 20px margin on every padded screen, and
+            // everything ran edge to edge.
+            paddingLeft: insets.left + (padded ? space.lg : 0),
+            paddingRight: insets.right + (padded ? space.lg : 0),
           },
           style,
         ]}
@@ -99,7 +103,6 @@ const Screen = ({
 const styles = StyleSheet.create({
   root: { flex: 1 },
   content: { flex: 1 },
-  padded: { paddingHorizontal: space.lg },
 });
 
 export default Screen;

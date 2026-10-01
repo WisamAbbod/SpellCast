@@ -9,6 +9,7 @@ import {
   MAX_PLAYERS,
   POINTS_PER_LEFTOVER_GEM,
   SLOW_ROUNDS,
+  STARTING_GEMS,
 } from './rules.js';
 import {
   analyseSlowBoard,
@@ -50,8 +51,8 @@ export const createSlowGame = ({
     isBot: !!player.isBot,
     level: player.level || DEFAULT_BOT_LEVEL,
     score: 0,
-    gems: 0,
-    gemsCollected: 0,
+    gems: STARTING_GEMS,
+    gemsCollected: 0, // found on the board; the starting gems are not counted
     words: [],
     best: null,
     passes: 0,
@@ -271,7 +272,7 @@ export const applyAbility = (state, key, payload = {}) => {
   }
   if (key === 'extend') {
     if (!state.timerEnabled) return fail('The turn timer is off');
-    if (state.extensions >= MAX_EXTENSIONS_PER_TURN) return fail('No more time to buy');
+    if (state.extensions >= MAX_EXTENSIONS_PER_TURN) return fail('No more resets this turn');
   }
 
   let board = state.board;

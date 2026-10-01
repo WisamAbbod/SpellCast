@@ -1,4 +1,5 @@
 import MenuScreen from '../screens/MenuScreen.js';
+import WelcomeScreen from '../screens/WelcomeScreen.js';
 import DailyScreen from '../screens/DailyScreen.js';
 import PracticeScreen from '../screens/PracticeScreen.js';
 import GameScreen from '../screens/GameScreen.js';
@@ -8,10 +9,13 @@ import SettingsScreen from '../screens/SettingsScreen.js';
 import ShopScreen from '../screens/ShopScreen.js';
 import InstructionsScreen from '../screens/InstructionsScreen.js';
 import SlowSetupScreen from '../screens/SlowSetupScreen.js';
+import SlowOnlineScreen from '../screens/SlowOnlineScreen.js';
+import SlowLobbyScreen from '../screens/SlowLobbyScreen.js';
 import SlowGameScreen from '../screens/SlowGameScreen.js';
 import SlowResultsScreen from '../screens/SlowResultsScreen.js';
 
 export const SCREENS = {
+  welcome: WelcomeScreen,
   menu: MenuScreen,
   daily: DailyScreen,
   practice: PracticeScreen,
@@ -22,8 +26,10 @@ export const SCREENS = {
   shop: ShopScreen,
   instructions: InstructionsScreen,
 
-  // Slow mode: the turn-based, pass-and-play game.
+  // Slow mode: the turn-based game, on one phone or across several.
   slowSetup: SlowSetupScreen,
+  slowOnline: SlowOnlineScreen,
+  slowLobby: SlowLobbyScreen,
   slowGame: SlowGameScreen,
   slowResults: SlowResultsScreen,
 };

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import Screen from '../components/Screen.js';
 import Button from '../components/Button.js';
+import Sheet from '../components/Sheet.js';
+import BotAvatar from '../components/BotAvatar.js';
 import { Card } from '../components/Stat.js';
 import { colors } from '../theme/colors.js';
 import { fonts } from '../theme/typography.js';
@@ -9,11 +11,12 @@ import { radius, space } from '../theme/layout.js';
 import {
   ABILITIES, BOT_LEVELS, BOT_NAMES, DEFAULT_BOT_LEVEL, HUMAN_NAMES,
   LONG_WORD_BONUS, LONG_WORD_MIN, MAX_PLAYERS, MIN_PLAYERS,
-  POINTS_PER_LEFTOVER_GEM, SLOW_ROUNDS, TURN_EXTEND_SECONDS, TURN_SECONDS,
+  POINTS_PER_LEFTOVER_GEM, SLOW_ROUNDS, TURN_SECONDS,
 } from '../game/slow/rules.js';
 import {
   NAME_MAX_LENGTH, loadSlowSetup, makePlayerId, saveSlowSetup,
 } from '../storage/slowSetup.js';
+import { CHARACTERS, CHARACTER_ORDER, characterFor } from '../game/slow/characters.js';
 
 /** Declaration order in rules.js is the difficulty ladder, so cycling is just +1. */
 const LEVEL_KEYS = Object.keys(BOT_LEVELS);
@@ -60,6 +63,7 @@ const pickName = (pool, players, index) => {
 const SlowSetupScreen = ({ nav }) => {
   const [players, setPlayers] = useState([]);
   const [timerEnabled, setTimerEnabled] = useState(false);
+  const [profile, setProfile] = useState(null); // index of the bot being looked at
 
   useEffect(() => {
     let cancelled = false;
@@ -90,16 +94,25 @@ const SlowSetupScreen = ({ nav }) => {
     const player = players[index];
     const isBot = !player.isBot;
     const current = player.name.trim();
-    // Only replace a name the lobby chose itself, so a typed one survives the flip.
-    const chosen = !current || (isBot ? HUMAN_NAMES : BOT_NAMES).includes(current);
+    // A bot's name is its character, so turning into a bot always picks one.
+    // Turning back into a human only replaces a name the lobby chose itself, so
+    // a typed one survives the round trip.
+    const chosen = !current || BOT_NAMES.includes(current);
     commit({
       players: patch(index, {
         isBot,
-        name: chosen ? pickName(isBot ? BOT_NAMES : HUMAN_NAMES, players, index) : player.name,
+        name: isBot
+          ? pickName(BOT_NAMES, players, index)
+          : chosen
+            ? pickName(HUMAN_NAMES, players, index)
+            : player.name,
       }),
       timerEnabled,
     });
   };
+
+  const chooseCharacter = (index, key) =>
+    commit({ players: patch(index, { name: CHARACTERS[key].name }), timerEnabled });
 
   const cycleLevel = (index) => {
     const at = LEVEL_KEYS.indexOf(players[index].level);
@@ -148,7 +161,7 @@ const SlowSetupScreen = ({ nav }) => {
 
   return (
     <Screen>
-      <Text style={styles.title}>SLOW MODE</Text>
+      <Text style={styles.title}>OFFLINE MODE</Text>
       <Text style={styles.blurb}>
         Pass one phone around: {MIN_PLAYERS}–{MAX_PLAYERS} players, {SLOW_ROUNDS} rounds,
         one shared board.
@@ -167,17 +180,32 @@ const SlowSetupScreen = ({ nav }) => {
             const named = player.name.trim() || `Player ${index + 1}`;
             return (
               <View key={player.id} style={styles.player}>
-                <TextInput
-                  value={player.name}
-                  onChangeText={(name) => rename(index, name)}
-                  onEndEditing={() => commit({ players, timerEnabled })}
-                  placeholder={`Player ${index + 1}`}
-                  placeholderTextColor={colors.textFaint}
-                  maxLength={NAME_MAX_LENGTH}
-                  autoCorrect={false}
-                  style={styles.name}
-                  accessibilityLabel={`Name for player ${index + 1}`}
-                />
+                {player.isBot ? (
+                  // Bots are characters, not name fields: tap for their profile.
+                  <Pressable
+                    onPress={() => setProfile(index)}
+                    style={styles.botName}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${named}. ${characterFor(player)?.title || 'Bot'}. Open profile.`}
+                  >
+                    <BotAvatar player={player} size={26} />
+                    <Text style={styles.botNameText} numberOfLines={1}>
+                      {named}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <TextInput
+                    value={player.name}
+                    onChangeText={(name) => rename(index, name)}
+                    onEndEditing={() => commit({ players, timerEnabled })}
+                    placeholder={`Player ${index + 1}`}
+                    placeholderTextColor={colors.textFaint}
+                    maxLength={NAME_MAX_LENGTH}
+                    autoCorrect={false}
+                    style={styles.name}
+                    accessibilityLabel={`Name for player ${index + 1}`}
+                  />
+                )}
                 <Pill
                   label={player.isBot ? 'Bot' : 'Human'}
                   active={player.isBot}
@@ -226,7 +254,7 @@ const SlowSetupScreen = ({ nav }) => {
             <View style={styles.rowText}>
               <Text style={styles.rowLabel}>{TURN_SECONDS} seconds a turn</Text>
               <Text style={styles.rowHint}>
-                Anyone stuck can spend a gem for {TURN_EXTEND_SECONDS} more seconds.
+                Anyone stuck can spend a gem to reset their clock.
               </Text>
             </View>
             <Switch
@@ -267,6 +295,62 @@ const SlowSetupScreen = ({ nav }) => {
         accessibilityLabel={canStart ? 'Start game' : 'Start game. Every player needs a name.'}
       />
       <Button label="Back" variant="ghost" onPress={() => nav.pop()} />
+
+      {/* The profile card. Also the place to swap a bot for another character:
+          characters already seated elsewhere are dimmed, because two Vegas at
+          one table would make every name on the board ambiguous. */}
+      {(() => {
+        const player = profile === null ? null : players[profile];
+        const character = player ? characterFor(player) : null;
+        const taken = new Set(
+          players
+            .filter((other, i) => i !== profile && other.isBot)
+            .map((other) => other.name.trim().toLowerCase()),
+        );
+
+        return (
+          <Sheet
+            visible={!!player && player.isBot}
+            title={player ? player.name : ''}
+            onRequestClose={() => setProfile(null)}
+          >
+            {!!player && (
+              <View style={styles.profileTop}>
+                <BotAvatar player={player} size={84} />
+                <Text style={styles.profileTitle}>{character ? character.title : 'A bot'}</Text>
+                <Text style={styles.profileBio}>
+                  {character
+                    ? character.bio
+                    : 'Nobody in particular. Pick a character below to give them one.'}
+                </Text>
+                {!!character && <Text style={styles.profileStyle}>Plays: {character.style}</Text>}
+              </View>
+            )}
+
+            <View style={styles.cast}>
+              {CHARACTER_ORDER.map((key) => {
+                const isTaken = taken.has(key);
+                const chosen = character && character.key === key;
+                return (
+                  <Pressable
+                    key={key}
+                    disabled={isTaken}
+                    onPress={() => chooseCharacter(profile, key)}
+                    style={[styles.castMember, chosen && styles.castChosen, isTaken && styles.castTaken]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: !!chosen, disabled: isTaken }}
+                    accessibilityLabel={`${CHARACTERS[key].name}, ${CHARACTERS[key].title}${isTaken ? ', already playing' : ''}`}
+                  >
+                    <BotAvatar characterKey={key} size={36} />
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Button label="Done" variant="ghost" onPress={() => setProfile(null)} />
+          </Sheet>
+        );
+      })()}
     </Screen>
   );
 };
@@ -285,6 +369,38 @@ const styles = StyleSheet.create({
   count: { fontFamily: fonts.body, fontSize: 11, color: colors.textFaint },
 
   player: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5 },
+  botName: {
+    flex: 1,
+    minWidth: 80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: space.sm,
+    paddingVertical: 5,
+  },
+  botNameText: { flex: 1, fontFamily: fonts.bodySemi, fontSize: 14, color: colors.text },
+  profileTop: { alignItems: 'center', gap: space.sm },
+  profileTitle: {
+    fontFamily: fonts.bodySemi, fontSize: 12, letterSpacing: 1.6,
+    color: colors.textFaint, textTransform: 'uppercase',
+  },
+  profileBio: {
+    fontFamily: fonts.body, fontSize: 14, color: colors.textDim,
+    textAlign: 'center', lineHeight: 20,
+  },
+  profileStyle: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.accent, textAlign: 'center' },
+  // Wraps: six avatars need ~316dp and a sheet on a 360dp phone has ~264.
+  cast: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center',
+    gap: space.sm, marginVertical: space.sm,
+  },
+  castMember: { padding: 4, borderRadius: radius.sm, borderWidth: 1, borderColor: 'transparent' },
+  castChosen: { borderColor: colors.primaryEdge, backgroundColor: colors.primaryDim },
+  castTaken: { opacity: 0.3 },
   name: {
     flex: 1,
     minWidth: 80,

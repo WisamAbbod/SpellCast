@@ -69,7 +69,7 @@ export const resetProfile = async () => {
     practice: { ...DEFAULT_PROFILE.practice },
     perLength: {},
     wallet: { ...DEFAULT_PROFILE.wallet },
-    unlocks: { backgrounds: [], tracks: [] },
+    unlocks: { backgrounds: [], tracks: [], costumes: [] },
     earn: { ...DEFAULT_PROFILE.earn },
   };
   await saveProfile(fresh);

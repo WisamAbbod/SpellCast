@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  InteractionManager,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +12,11 @@ import Board from '../components/Board.js';
 import Button from '../components/Button.js';
 import Sheet from '../components/Sheet.js';
 import Confetti from '../components/Confetti.js';
-import MuteButton from '../components/MuteButton.js';
+import MusicButton from '../components/MusicButton.js';
+import Mascot from '../components/Mascot.js';
+import BotAvatar from '../components/BotAvatar.js';
+import { thinkingLine } from '../game/slow/characters.js';
+import { gazeForCell, moodForRound, moodForWord } from '../game/mascot.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { useCountdown } from '../hooks/useCountdown.js';
 import { useBoardLayout, radius, space } from '../theme/layout.js';
@@ -29,14 +32,17 @@ import { CELL_COUNT, MIN_WORD_LENGTH } from '../game/rules.js';
 import { isValidWord } from '../game/dictionary.js';
 import { deadlineFrom, resumeDeadline } from '../game/time.js';
 import {
-  ABILITIES, ABILITY_ORDER, MAX_GEMS, TURN_EXTEND_SECONDS, TURN_SECONDS,
+  ABILITIES, ABILITY_ORDER, MAX_GEMS, TURN_SECONDS,
 } from '../game/slow/rules.js';
 import {
-  applyAbility, createSlowGame, currentPlayer, passTurn, submitWord, totalTurns,
+  applyAbility, createSlowGame, currentPlayer, passTurn, standings, submitWord, totalTurns,
 } from '../game/slow/game.js';
 import { chooseBotWord, planBotTurn } from '../game/slow/bot.js';
 import { slowLetterValue } from '../game/slow/scoring.js';
-import { finishSlowGame } from '../session/round.js';
+import { finishOnlineGame, finishSlowGame } from '../session/round.js';
+import { runWhenIdle } from '../session/idle.js';
+import { useOnlineSlowGame } from '../online/useOnlineSlowGame.js';
+import { finishRoom, isMySeat } from '../online/rooms.js';
 
 /**
  * Slow mode: the turn-based game.
@@ -67,11 +73,60 @@ const HINT_MS = 4200;
 
 const LETTER_ROWS = ['ABCDEFGHI', 'JKLMNOPQR', 'STUVWXYZ'];
 
-const SlowGameScreen = ({ nav, config }) => {
+const SlowGameScreen = ({ nav, config: localConfig, online }) => {
   const settings = useSettings();
   const layout = useBoardLayout();
 
+  /*
+   * Online and local are the same screen.
+   *
+   * The hook is called unconditionally and simply does nothing without a room,
+   * because the alternative - two components - would mean duplicating eight
+   * hundred lines of board, HUD and swipe handling to change where the state
+   * comes from.
+   *
+   * What makes this cheap is that replay is deterministic: the state a local
+   * submitWord() returns is byte-for-byte the state every other device will
+   * derive from the same move. So the optimistic path below is not a guess that
+   * needs reconciling - it is the answer, arriving early. All the existing
+   * celebration stagecraft survives untouched.
+   */
+  const session = useOnlineSlowGame({
+    room: online ? online.room : null,
+    uid: online ? online.uid : null,
+  });
+  const isOnline = session.enabled;
+
+  const config = useMemo(
+    () =>
+      isOnline
+        ? {
+            seed: session.room.seed,
+            players: session.players,
+            rounds: session.room.rounds,
+            timerEnabled: session.room.timerEnabled,
+          }
+        : localConfig,
+    [isOnline, session.room, session.players, localConfig],
+  );
+
   const [game, setGame] = useState(null);
+
+  /*
+   * Every move that has to reach the other phones goes through here, and the
+   * acting player decides how it is sent. A bot's move is sent by the host on a
+   * seat that is not the host's own, so it must be forced past the "is it your
+   * turn?" check - without that, every bot word, shuffle and pass was silently
+   * refused, the host's screen carried on alone, and every phone froze on the
+   * next human turn waiting for a move that had never been sent.
+   */
+  const publish = useCallback(
+    (type, payload, actor) => {
+      if (!isOnline) return;
+      session.play(type, payload || {}, { force: !!(actor && actor.isBot) });
+    },
+    [isOnline, session],
+  );
   // idle -> handoff -> playing -> celebrating, with bot turns running
   // thinking -> tracing -> celebrating instead.
   const [phase, setPhase] = useState('idle');
@@ -84,6 +139,11 @@ const SlowGameScreen = ({ nav, config }) => {
   const [paused, setPaused] = useState(false);
   const [swapping, setSwapping] = useState(null); // { index } once a tile is picked
   const [deadline, setDeadline] = useState(null);
+  const [mascotReaction, setMascotReaction] = useState(null);
+  const [boardSpace, setBoardSpace] = useState(null);
+  const react = useCallback((mood) => {
+    setMascotReaction((previous) => ({ mood, key: (previous ? previous.key : 0) + 1 }));
+  }, []);
 
   const timers = useRef([]);
   // Mirrored so resume can rebuild the deadline without the countdown's value
@@ -148,10 +208,14 @@ const SlowGameScreen = ({ nav, config }) => {
       return undefined;
     }
 
+    // Online, the opening state arrives from the replayed move log rather than
+    // being built here - the effect below adopts it as soon as it exists.
+    if (isOnline) return undefined;
+
     let cancelled = false;
     // Building the opening board runs the generator and the solver. Two frames
     // after the transition settles, so the screen paints first.
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = runWhenIdle(() => {
       requestAnimationFrame(() =>
         requestAnimationFrame(() => {
           if (cancelled) return;
@@ -159,6 +223,7 @@ const SlowGameScreen = ({ nav, config }) => {
             createSlowGame({
               seed: config.seed,
               players: config.players,
+              rounds: config.rounds,
               timerEnabled: !!config.timerEnabled,
             }),
           );
@@ -172,7 +237,60 @@ const SlowGameScreen = ({ nav, config }) => {
       cancelled = true;
       task.cancel?.();
     };
-  }, [config, nav]);
+  }, [config, isOnline, nav]);
+
+  /*
+   * Adopting somebody else's move.
+   *
+   * The replayed state is the truth, but it must not simply be rendered - a
+   * word played on another device has to be celebrated on the board it was
+   * played on, exactly like a local one, or the tiles pop over letters that
+   * have already been replaced.
+   *
+   * A move this device made itself is already on screen (the optimistic path in
+   * commit), and the turn index will match, so this does nothing for it.
+   */
+  useEffect(() => {
+    if (!isOnline || !session.game) return;
+    const incoming = session.game;
+
+    if (!game) {
+      setGame(incoming);
+      playStart();
+      startMusic();
+      return;
+    }
+    if (incoming.turnIndex === game.turnIndex && incoming.board.version === game.board.version) {
+      return;
+    }
+    // Behind by at least one move. Replay is deterministic, so this is the same
+    // object our own submitWord would have produced.
+    if (incoming.turnIndex < game.turnIndex) return; // a stale echo; ignore
+
+    const event = incoming.lastEvent;
+    if (event && event.type === 'word' && Array.isArray(event.indices)) {
+      setPhase('celebrating');
+      popCounter.current += 1;
+      const stamp = popCounter.current;
+      setPopKeys((previous) => {
+        const next = { ...previous };
+        event.indices.forEach((index) => {
+          next[index] = stamp;
+        });
+        return next;
+      });
+      flash(`${event.playerName}: ${event.word}  +${event.scored.score}`, 'success');
+      playWord(1);
+      react('happy');
+      later(() => {
+        setGame(incoming);
+        markReplaced(event.indices);
+      }, CELEBRATION_MS);
+      return;
+    }
+
+    setGame(incoming);
+  }, [isOnline, session.game, game, flash, later, markReplaced, react]);
 
   // Once the game is finished turnIndex sits one past the last turn, which
   // would wrap round to player 0 and a round that never happened. The HUD stays
@@ -251,6 +369,9 @@ const SlowGameScreen = ({ nav, config }) => {
         if (plan.shuffle) {
           const shuffled = applyAbility(working, 'shuffle');
           if (shuffled.ok) {
+            // Published, or the bot's word below is traced on a board that only
+            // exists on this phone, and every other phone rejects it.
+            publish('shuffle', {}, currentPlayer(working));
             working = shuffled.state;
             setGame(working);
             playShuffle();
@@ -263,6 +384,7 @@ const SlowGameScreen = ({ nav, config }) => {
         if (!move) {
           flash(`${currentPlayer(working).name} passed`);
           const passed = passTurn(working, 'no word found');
+          publish('pass', { reason: 'no word found' }, currentPlayer(working));
           later(() => setGame(passed.state), 700);
           return;
         }
@@ -283,12 +405,13 @@ const SlowGameScreen = ({ nav, config }) => {
           // a turn that never ends is the one bug a player cannot recover from.
           if (!commitRef.current(working, move.indices)) {
             const passed = passTurn(working, 'move rejected');
+            publish('pass', { reason: 'move rejected' }, currentPlayer(working));
             later(() => setGame(passed.state), 400);
           }
         }, cells.length * BOT_STEP_MS + BOT_SUBMIT_PAUSE_MS);
       }, plan.thinkMs);
     },
-    [flash, later],
+    [flash, later, publish],
   );
 
   /**
@@ -302,6 +425,7 @@ const SlowGameScreen = ({ nav, config }) => {
       if (!result.ok) {
         flash(result.reason);
         playInvalid();
+        react('oops');
         return false;
       }
 
@@ -335,7 +459,12 @@ const SlowGameScreen = ({ nav, config }) => {
       flash(notes.join('   '), 'success');
 
       playWord(event.scored.doubleWord ? 1.5 : 1);
+      react(moodForWord({ length: event.word.length }));
       if (event.scored.longWord || event.scored.doubleWord) setBurst((value) => value + 1);
+
+      // Publishing happens after the engine has accepted the word, so an
+      // illegal move never reaches anybody else's device.
+      publish('word', { indices }, currentPlayer(state));
 
       later(() => {
         // Batched with setGame so the tile re-renders with its new letter and
@@ -346,7 +475,7 @@ const SlowGameScreen = ({ nav, config }) => {
       }, CELEBRATION_MS);
       return true;
     },
-    [flash, later, markReplaced],
+    [flash, later, markReplaced, publish, react],
   );
 
   // runBotTurn closes over `commit`, which is defined after it. Keeping the
@@ -369,9 +498,44 @@ const SlowGameScreen = ({ nav, config }) => {
       // Paid here rather than on the results screen, because finishing.current
       // already guarantees this runs once per game - the results screen remounts
       // if somebody navigates back to it, and would pay again.
-      const award = finishSlowGame(game); // never rejects
+      // Online pays by this phone's seat; one shared phone pays the table.
+      const award = isOnline ? finishOnlineGame(game, online.uid) : finishSlowGame(game); // never rejects
+
+      /*
+       * Online, every device writes the standings and the server keeps the
+       * first. Doing it on one nominated client would mean the game has no
+       * result at all if that one person's connection died on the last turn -
+       * which is exactly when it is most likely to.
+       */
+      const published = isOnline
+        ? finishRoom({
+            roomId: session.room.id,
+            results: standings(game).map((entry) => ({
+              // The engine's roster keeps `id`, not `uid`; the join RPCs set
+              // both to auth.uid(), so for a human they are the same string.
+              uid: entry.isBot ? null : entry.id,
+              name: entry.name,
+              isBot: entry.isBot,
+              rank: entry.rank,
+              total: entry.total,
+              score: entry.score,
+              gems: entry.gems,
+              wordCount: entry.words.length,
+              bestWord: entry.best ? entry.best.word : null,
+              bestWordScore: entry.best ? entry.best.score : 0,
+            })),
+          })
+        : Promise.resolve(null);
+
       later(() => {
-        award.then((earned) => nav.replace('slowResults', { state: game, config, earned }));
+        Promise.all([award, published]).then(([earned]) =>
+          nav.replace('slowResults', {
+            state: game,
+            config,
+            earned,
+            online: isOnline ? { room: session.room, uid: online.uid } : null,
+          }),
+        );
       }, 600);
       return;
     }
@@ -385,10 +549,40 @@ const SlowGameScreen = ({ nav, config }) => {
     setSwapping(null);
 
     const next = currentPlayer(game);
+
+    if (isOnline) {
+      /*
+       * Online there is no handoff - everybody has their own screen. What
+       * matters instead is who is allowed to act:
+       *
+       *   - your seat        -> play
+       *   - somebody else's  -> watch, and let their move arrive
+       *   - a bot's          -> ONLY the host plays it out. If every client ran
+       *                         the bot, all of them would race to write the
+       *                         same move and the unique index would reject all
+       *                         but one anyway - but they would each pick a
+       *                         different word first, so the one that landed
+       *                         would not be the one most of them animated.
+       */
+      if (next.isBot) {
+        if (session.isHost) runBotTurn(game);
+        else setPhase('waiting');
+      } else if (isMySeat(session.room.roster, online.uid, game.turnIndex)) {
+        // Judged on the board on screen, not on the server's replay - which can
+        // be a moment behind it, and was how a dropped bot move turned into a
+        // permanent "waiting" screen.
+        beginHumanTurn();
+      } else {
+        setPhase('waiting');
+      }
+      return;
+    }
+
     if (next.isBot) runBotTurn(game);
     else if (humans > 1) setPhase('handoff');
     else beginHumanTurn();
-  }, [beginHumanTurn, clearTimers, config, game, humans, later, nav, paused, runBotTurn]);
+  }, [beginHumanTurn, clearTimers, config, game, humans, later, nav, paused, runBotTurn,
+      isOnline, session.isHost, session.room, online]);
 
   /* -------------------------------------------------------------- clock -- */
 
@@ -398,8 +592,11 @@ const SlowGameScreen = ({ nav, config }) => {
     flash(`${currentPlayer(game).name} ran out of time`);
     playInvalid();
     const passed = passTurn(game, 'timed out');
+    // Only the device whose turn it is may write the timeout, or six clients
+    // race to pass the same turn and five of them lose on the unique index.
+    publish('pass', { reason: 'timed out' }, currentPlayer(game));
     later(() => setGame(passed.state), 500);
-  }, [flash, game, later, phase]);
+  }, [flash, game, later, phase, publish]);
 
   const secondsLeft = useCountdown(deadline, {
     running: phase === 'playing' && !paused && !!deadline,
@@ -450,8 +647,10 @@ const SlowGameScreen = ({ nav, config }) => {
       // there is no celebration to hold the old board for.
       startedTurn.current = result.state.turnIndex;
       setGame(result.state);
+      publish(key, payload, currentPlayer(game));
 
       if (key === 'shuffle') {
+        react('dizzy');
         // Any hint on screen now points at letters that have moved.
         setHint(null);
         markReplaced(ALL_CELLS);
@@ -468,11 +667,13 @@ const SlowGameScreen = ({ nav, config }) => {
         flash(`Try ${result.event.hint.word}`, 'success');
         later(() => setHint(null), HINT_MS);
       } else if (key === 'extend') {
-        setDeadline((current) => (current || Date.now()) + TURN_EXTEND_SECONDS * 1000);
-        flash(`+${TURN_EXTEND_SECONDS}s`, 'success');
+        // Back to a full turn. Only this device runs this turn's clock, so
+        // there is nothing to tell the other players' phones.
+        setDeadline(deadlineFrom(TURN_SECONDS));
+        flash('Timer reset', 'success');
       }
     },
-    [ALL_CELLS, flash, game, later, markReplaced, phase],
+    [ALL_CELLS, flash, game, later, markReplaced, phase, publish, react],
   );
 
   const passNow = useCallback(() => {
@@ -480,8 +681,9 @@ const SlowGameScreen = ({ nav, config }) => {
     setPhase('celebrating'); // close the board before the state catches up
     flash(`${currentPlayer(game).name} passed`);
     const passed = passTurn(game, 'passed');
+    publish('pass', { reason: 'passed' }, currentPlayer(game));
     later(() => setGame(passed.state), 400);
-  }, [flash, game, later, phase]);
+  }, [flash, game, later, phase, publish]);
 
   const beginSwap = useCallback(() => {
     if (!game) return;
@@ -539,6 +741,27 @@ const SlowGameScreen = ({ nav, config }) => {
 
   const round = shown.round;
   const showTimer = !!config?.timerEnabled && phase === 'playing';
+
+  /*
+   * The astronaut, in the space above the board (see GameScreen). It watches
+   * whatever is being traced - your finger, or a bot playing its word out tile
+   * by tile - and looks thoughtful while it is somebody else's turn.
+   */
+  const band = boardSpace ? (boardSpace.height - layout.frameWidth) / 2 : 0;
+  const astronautSize = Math.min(96, Math.floor(band - 4));
+  const astronautAbove = astronautSize >= 52;
+  const watched = selection.length ? selection[selection.length - 1] : null;
+  // Plain, not useMemo: this runs after the early return above, where a hook
+  // would change the hook count between renders. Mascot only reads the numbers.
+  const gaze = watched ? gazeForCell(watched) : null;
+  const astronautMood =
+    phase === 'thinking' || phase === 'tracing' || phase === 'waiting'
+      ? 'thinking'
+      : moodForRound({
+          secondsLeft,
+          running: showTimer && !paused,
+          tracing: swipe.path.length > 0,
+        });
   const isHumanTurn = phase === 'playing';
 
   return (
@@ -553,13 +776,15 @@ const SlowGameScreen = ({ nav, config }) => {
           <Text style={styles.pauseIcon}>❚❚</Text>
         </Pressable>
 
-        <MuteButton size={44} />
+        <MusicButton size={44} />
 
         <View style={styles.hudCenter}>
-          <Text style={styles.turnName} numberOfLines={1}>
-            {player.name}
-            {player.isBot ? ' 🤖' : ''}
-          </Text>
+          <View style={styles.turnNameRow}>
+            {player.isBot && <BotAvatar player={player} size={20} />}
+            <Text style={styles.turnName} numberOfLines={1}>
+              {player.name}
+            </Text>
+          </View>
           <Text style={styles.hudLabel}>ROUND {round} OF {game.rounds}</Text>
         </View>
 
@@ -587,10 +812,12 @@ const SlowGameScreen = ({ nav, config }) => {
           const active = index === shown.seat;
           return (
             <View key={entry.id} style={[styles.playerChip, active && styles.playerChipActive]}>
-              <Text style={[styles.playerName, active && styles.playerNameActive]} numberOfLines={1}>
-                {entry.name}
-                {entry.isBot ? ' 🤖' : ''}
-              </Text>
+              <View style={styles.playerNameRow}>
+                {entry.isBot && <BotAvatar player={entry} size={14} />}
+                <Text style={[styles.playerName, active && styles.playerNameActive]} numberOfLines={1}>
+                  {entry.name}
+                </Text>
+              </View>
               <View style={styles.playerMeta}>
                 <Text style={styles.playerScore}>{entry.score}</Text>
                 <View style={styles.gemDot} />
@@ -602,6 +829,17 @@ const SlowGameScreen = ({ nav, config }) => {
       </ScrollView>
 
       <View style={styles.wordBar}>
+        {/* Thoughtful while it is somebody else's move - a bot's or, online,
+            another player's - and at rest when it is yours. */}
+        {!astronautAbove && (
+          <Mascot
+            size={40}
+            mood={astronautMood}
+            reaction={mascotReaction}
+            lookAt={gaze}
+            style={styles.wordMascot}
+          />
+        )}
         {feedback ? (
           <Text
             style={[
@@ -620,17 +858,32 @@ const SlowGameScreen = ({ nav, config }) => {
         ) : (
           <Text style={styles.hint} numberOfLines={1}>
             {phase === 'thinking'
-              ? `${player.name} is thinking…`
+              ? thinkingLine(player)
               : phase === 'tracing'
                 ? `${player.name} is playing…`
-                : swapping
-                  ? 'Pick a tile to replace'
-                  : 'Swipe letters to spell a word'}
+                : phase === 'waiting'
+                  ? `Waiting for ${player.name}…`
+                  : swapping
+                    ? 'Pick a tile to replace'
+                    : 'Swipe letters to spell a word'}
           </Text>
         )}
       </View>
 
-      <View style={styles.boardArea} {...(swapping ? {} : swipe.panHandlers)}>
+      <View
+        style={styles.boardArea}
+        onLayout={(event) => setBoardSpace(event.nativeEvent.layout)}
+        {...(swapping ? {} : swipe.panHandlers)}
+      >
+        {astronautAbove && (
+          <Mascot
+            size={astronautSize}
+            mood={astronautMood}
+            reaction={mascotReaction}
+            lookAt={gaze}
+            style={[styles.astronaut, { top: Math.max(0, (band - astronautSize) / 2) }]}
+          />
+        )}
         <Board
           board={game.board.letters}
           layout={layout}
@@ -699,10 +952,10 @@ const SlowGameScreen = ({ nav, config }) => {
                 (!isHumanTurn || player.gems < ABILITIES.extend.cost) && styles.abilityOff,
               ]}
               accessibilityRole="button"
-              accessibilityLabel={`Buy ${TURN_EXTEND_SECONDS} more seconds for ${ABILITIES.extend.cost} gem`}
+              accessibilityLabel={`Reset the turn timer to ${TURN_SECONDS} seconds for ${ABILITIES.extend.cost} gem`}
             >
               <Text style={styles.abilityIcon}>{ABILITIES.extend.icon}</Text>
-              <Text style={styles.abilityLabel}>{ABILITIES.extend.label}</Text>
+              <Text style={styles.abilityLabel} numberOfLines={1}>{ABILITIES.extend.label}</Text>
               <Text style={styles.abilityCost}>{ABILITIES.extend.cost}◆</Text>
             </Pressable>
           )}
@@ -785,7 +1038,7 @@ const styles = StyleSheet.create({
   hudCenter: { flex: 1, alignItems: 'center' },
   hudRight: { minWidth: 64, alignItems: 'flex-end' },
   turnName: {
-    color: colors.text, fontFamily: fonts.display, fontSize: 20, letterSpacing: 1,
+    color: colors.text, fontFamily: fonts.display, fontSize: 20, letterSpacing: 1, flexShrink: 1,
   },
   turnCount: { color: colors.textDim, fontFamily: fonts.display, fontSize: 18 },
   timer: { color: colors.accent, fontFamily: fonts.display, fontSize: 22 },
@@ -808,7 +1061,7 @@ const styles = StyleSheet.create({
   },
   playerChipActive: { borderColor: colors.primary, backgroundColor: colors.primaryDim },
   playerName: {
-    color: colors.textDim, fontFamily: fonts.bodySemi, fontSize: 11, letterSpacing: 0.4,
+    color: colors.textDim, fontFamily: fonts.bodySemi, fontSize: 11, letterSpacing: 0.4, flexShrink: 1,
   },
   playerNameActive: { color: colors.text },
   playerMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
@@ -819,9 +1072,14 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '45deg' }], marginLeft: 3,
   },
 
+  // Padded symmetrically past the mascot, so the text stays centred and a long
+  // feedback line shrinks before it can run underneath it.
   wordBar: {
-    height: 46, alignItems: 'center', justifyContent: 'center', paddingHorizontal: space.lg,
+    height: 46, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 58,
   },
+  wordMascot: { position: 'absolute', left: space.md, top: 3 },
+  turnNameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  playerNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   currentWord: {
     color: colors.text, fontFamily: fonts.display, fontSize: 24, letterSpacing: 4,
   },
@@ -831,16 +1089,17 @@ const styles = StyleSheet.create({
   hint: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 13 },
 
   boardArea: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  astronaut: { position: 'absolute', right: space.md },
 
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    paddingHorizontal: space.lg,
+    paddingHorizontal: space.md,
     paddingTop: space.sm,
     minHeight: 72,
   },
-  gemPurse: { alignItems: 'center', minWidth: 54 },
+  gemPurse: { alignItems: 'center', minWidth: 44 },
   gemDotLarge: {
     width: 14, height: 14, backgroundColor: colors.gem,
     transform: [{ rotate: '45deg' }], marginBottom: 6,
@@ -848,11 +1107,16 @@ const styles = StyleSheet.create({
   gemCount: { color: colors.text, fontFamily: fonts.displayBold, fontSize: 14 },
   gemCap: { color: colors.textFaint, fontFamily: fonts.body, fontSize: 10 },
 
-  abilities: { flex: 1, flexDirection: 'row', gap: space.sm, justifyContent: 'flex-end' },
+  // The buttons SHARE what is left rather than each insisting on a width:
+  // with the turn timer on there are four, and at fixed widths they overflowed
+  // leftwards straight over the Pass button on an ordinary phone.
+  abilities: { flex: 1, minWidth: 0, flexDirection: 'row', gap: 6, justifyContent: 'flex-end' },
   ability: {
-    minWidth: 62,
+    flex: 1,
+    minWidth: 0,
+    maxWidth: 72,
     paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     borderRadius: radius.sm,
     alignItems: 'center',
     backgroundColor: colors.primaryDim,
@@ -862,7 +1126,8 @@ const styles = StyleSheet.create({
   abilityOff: { opacity: 0.35 },
   pass: {
     minHeight: 44,
-    paddingHorizontal: 12,
+    flexShrink: 0,
+    paddingHorizontal: 10,
     justifyContent: 'center',
     borderRadius: radius.sm,
     borderWidth: 1,

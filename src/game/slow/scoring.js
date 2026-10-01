@@ -7,7 +7,8 @@ import {
 } from './rules.js';
 
 /**
- * Slow-mode scoring: SpellCast's, which is a different game to the daily mode's.
+ * Slow-mode scoring: Discord SpellCast's, which is a different game to the
+ * daily mode's.
  *
  * Daily mode multiplies by word length and adds big length bonuses, so a
  * seven-letter word is worth fifty times a three-letter one. Here the letters

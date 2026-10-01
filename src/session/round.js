@@ -1,6 +1,6 @@
 import { GENERATOR_VERSION } from '../config.js';
 import { puzzleNumber, utcDateKey } from '../game/daily.js';
-import { earnedForDaily, earnedForPractice, earnedForSlow } from '../game/economy.js';
+import { earnedForDaily, earnedForOnline, earnedForPractice, earnedForSlow } from '../game/economy.js';
 import { parPercent } from '../game/share.js';
 import { standings } from '../game/slow/game.js';
 import { getLeaderboard } from '../leaderboard/index.js';
@@ -160,6 +160,52 @@ export const finishSlowGame = async (state) => {
     const credited = credit(profile, earned.total, { bucket: 'slow', dateKey: today });
     await saveProfile(credited);
     return { ...earned, balance: balanceOf(credited) };
+  } catch (error) {
+    return { ...NOTHING_EARNED, balance: 0 };
+  }
+};
+
+/**
+ * An online game's payout, for ONE player - the one on this phone.
+ *
+ * Not finishSlowGame: that counts every human's words and pays the win bonus if
+ * any human won, which is right when all the humans share one phone and wrong
+ * online, where it would pay you for your opponent's words and for losing to
+ * them. Here it is your seat, your words, your place.
+ *
+ * With no other humans in the room - just you and bots - it is slow mode in all
+ * but name, so it is paid and capped as slow mode. Otherwise a private room of
+ * bots would be the most profitable thing in the game.
+ */
+export const finishOnlineGame = async (state, uid) => {
+  try {
+    const table = standings(state);
+    const mine = table.find((entry) => !entry.isBot && entry.id === uid);
+    if (!mine) return { ...NOTHING_EARNED, balance: balanceOf(await loadProfile()) };
+
+    const humanOpponents = table.filter((entry) => !entry.isBot && entry.id !== uid).length;
+    const profile = await loadProfile();
+    const today = utcDateKey();
+    const bucket = humanOpponents > 0 ? 'online' : 'slow';
+
+    const earned =
+      bucket === 'online'
+        ? earnedForOnline({
+            myWords: mine.words.length,
+            rank: mine.rank,
+            remaining: remainingFor(profile, 'online', today),
+          })
+        : earnedForSlow({
+            humanWords: mine.words.length,
+            humanWon: mine.rank === 1,
+            remaining: remainingFor(profile, 'slow', today),
+          });
+
+    if (earned.total === 0) return { ...earned, bucket, balance: balanceOf(profile) };
+
+    const credited = credit(profile, earned.total, { bucket, dateKey: today });
+    await saveProfile(credited);
+    return { ...earned, bucket, balance: balanceOf(credited) };
   } catch (error) {
     return { ...NOTHING_EARNED, balance: 0 };
   }

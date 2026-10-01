@@ -1,4 +1,4 @@
-import { PRACTICE_DAILY_CAP, SLOW_DAILY_CAP } from '../game/economy.js';
+import { ONLINE_DAILY_CAP, PRACTICE_DAILY_CAP, SLOW_DAILY_CAP } from '../game/economy.js';
 
 /**
  * The wallet, as a pure function of the profile.
@@ -25,11 +25,12 @@ export const canAfford = (profile, price) => balanceOf(profile) >= (Number(price
 
 /** A fresh earn ledger when the UTC day has turned over. */
 export const rollEarn = (earn, dateKey) =>
-  earn && earn.date === dateKey ? earn : { date: dateKey || null, practice: 0, slow: 0 };
+  earn && earn.date === dateKey ? earn : { date: dateKey || null, practice: 0, slow: 0, online: 0 };
 
 /** How much of today's cap is left for a bucket. */
 export const remainingFor = (profile, bucket, dateKey) => {
-  const cap = bucket === 'practice' ? PRACTICE_DAILY_CAP : SLOW_DAILY_CAP;
+  const cap =
+    bucket === 'practice' ? PRACTICE_DAILY_CAP : bucket === 'online' ? ONLINE_DAILY_CAP : SLOW_DAILY_CAP;
   const earn = rollEarn(profile && profile.earn, dateKey);
   return Math.max(0, cap - (earn[bucket] || 0));
 };
@@ -83,4 +84,19 @@ export const purchase = (profile, kind, key, price) => {
     // mutating it would poison the defaults for the whole process.
     unlocks: { ...unlocks, [kind]: [...(unlocks[kind] || []), key] },
   };
+};
+
+/**
+ * A developer's own top-up, for trying the shop without grinding for it.
+ *
+ * The amount is a TARGET, remembered on the profile, so it is paid once and not
+ * again on every launch - and raising the number later pays only the
+ * difference. Where the number comes from, and why no player can ever have
+ * one, is boot.js's business; this only does the sum.
+ */
+export const devGrant = (profile, amount) => {
+  const target = Math.max(0, Math.floor(Number(amount) || 0));
+  const given = Math.max(0, Math.floor(Number(profile.devGrant) || 0));
+  if (target <= given) return profile;
+  return { ...credit(profile, target - given), devGrant: target };
 };

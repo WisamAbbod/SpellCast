@@ -19,12 +19,16 @@ export const DEFAULT_SETTINGS = {
   musicVolume: 0.45,
   soundVolume: 0.8,
   displayName: '',
+  // Set once the welcome screen has been answered - named or skipped - so it is
+  // asked exactly once, not every launch for someone who chose to stay anonymous.
+  welcomed: false,
 
   // Which cosmetics are equipped. Ownership lives on the profile; this is only
   // the choice, so it belongs here with the other device preferences - and it
   // means Screen.js can read it from the subscription it already has.
   backgroundKey: 'nebula',
   trackKey: 'drift',
+  costumeKey: 'none',
 };
 
 export const DEFAULT_PROFILE = {
@@ -55,12 +59,15 @@ export const DEFAULT_PROFILE = {
   // Bought cosmetics, by catalog kind. Exactly one level of nesting: withDefaults
   // replaces depth-2 arrays wholesale, which is what we want. A THIRD level here
   // would silently stop merging.
-  unlocks: { backgrounds: [], tracks: [] },
+  unlocks: { backgrounds: [], tracks: [], costumes: [] },
 
   // One UTC day of earning, so the practice and slow caps cannot be farmed by
   // replaying. The daily payout needs no counter - it is guarded by the daily
   // record's own completion flag.
-  earn: { date: null, practice: 0, slow: 0 },
+  earn: { date: null, practice: 0, slow: 0, online: 0 },
+  // How much of a developer's own top-up this profile has already been given
+  // (see devGrant in wallet.js). Zero for every player there will ever be.
+  devGrant: 0,
 };
 
 export const DEFAULT_DAILY_RECORD = {
@@ -96,6 +103,32 @@ export const DEFAULT_SLOW_SETUP = {
   ],
   timerEnabled: false,
 };
+
+/**
+ * One limit for a player's name everywhere it appears. Twelve, because it has to
+ * fit in the slow-mode player rail and the online lobby; the leaderboard could
+ * take more, but a name cut short in one place and not another looks like a bug.
+ */
+export const NAME_LIMIT = 12;
+
+/** Trimmed, inner whitespace collapsed, capped. Empty means "no name". */
+export const cleanName = (raw) =>
+  String(raw || '').replace(/\s+/g, ' ').trim().slice(0, NAME_LIMIT).trim();
+
+/** The welcome screen shows until it is answered, unless a name already exists. */
+/**
+ * A volume as stored: 0-1, to the percent. withDefaults fills a MISSING field
+ * but passes a wrong one straight through, and a NaN volume would silence the
+ * player without anything on screen looking wrong.
+ */
+export const cleanVolume = (raw, fallback = DEFAULT_SETTINGS.musicVolume) => {
+  const value = Number(raw);
+  if (raw === null || raw === '' || !Number.isFinite(value)) return fallback;
+  return Math.round(Math.min(1, Math.max(0, value)) * 100) / 100;
+};
+
+export const needsWelcome = (settings) =>
+  !!settings && !settings.welcomed && !cleanName(settings.displayName);
 
 /** Shallow-merges one level deep, which is as deep as these records nest. */
 export const withDefaults = (value, defaults) => {

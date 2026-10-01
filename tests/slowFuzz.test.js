@@ -62,6 +62,12 @@ for (let g = 0; g < GAMES; g++) {
     const before = state.turnIndex;
     const actor = game.currentPlayer(state);
 
+    // The board as the GAME dealt it - measured before this harness's own
+    // random swaps, which put a Q wherever they like and say nothing about
+    // how well boards are generated and refilled.
+    const dealt = boardApi.analyseSlowBoard(state.board.letters).count;
+    if (dealt < worstBoard) worstBoard = dealt;
+
     // Spend gems the moment they can be spent, so abilities are exercised hard.
     if (rng() < 0.45) {
       const key = ['shuffle', 'swap', 'hint', 'extend'][Math.floor(rng() * 4)];
@@ -78,9 +84,7 @@ for (let g = 0; g < GAMES; g++) {
       }
     }
 
-    const words = boardApi.analyseSlowBoard(state.board.letters).count;
-    if (words < worstBoard) worstBoard = words;
-    if (words === 0) note(state, 'board had no words at all');
+    if (boardApi.analyseSlowBoard(state.board.letters).count === 0) note(state, 'board had no words at all');
 
     const plan = bot.planBotTurn(state);
     if (plan.shuffle) {

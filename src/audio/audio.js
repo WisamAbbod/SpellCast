@@ -2,6 +2,7 @@ import { AppState, Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { getSettings, subscribeToSettings } from '../storage/settings.js';
+import { cleanVolume } from '../storage/schema.js';
 import { MUSIC, SELECT_LADDER, SOUNDS } from './sounds.js';
 import { DEFAULT_TRACK } from './tracks.js';
 
@@ -30,8 +31,12 @@ const safely = (action) => {
   try {
     const result = action();
     if (result && typeof result.catch === 'function') result.catch(() => {});
+    // Returned, so `await safely(...)` actually waits. Without this the audio
+    // session was still being configured while the first play() went out.
+    return result;
   } catch (error) {
     /* audio is never worth a crash */
+    return undefined;
   }
 };
 
@@ -69,7 +74,27 @@ export const initAudio = async () => {
     currentTrackKey = getSettings().trackKey || DEFAULT_TRACK;
     music = createAudioPlayer(MUSIC[currentTrackKey] || MUSIC[DEFAULT_TRACK]);
     music.loop = true;
-    music.volume = getSettings().musicVolume;
+    music.volume = cleanVolume(getSettings().musicVolume);
+
+    // Belt and braces. `loop` maps to ExoPlayer's REPEAT_MODE_ONE on Android
+    // and to AVPlayer looping on iOS, and when it fails it fails silently -
+    // the track simply ends and the app is quiet for the rest of the session.
+    // A player parked at its end also ignores play(), which is why every
+    // start has to be able to rewind (see startMusic).
+    //
+    // When looping IS working the player is already playing again by the time
+    // this fires, so the `playing` guard makes it a no-op rather than a
+    // stutter.
+    music.addListener('playbackStatusUpdate', (status) => {
+      if (!status || !status.didJustFinish || status.playing) return;
+      if (!musicWanted) return;
+      const settings = getSettings();
+      if (settings.muted || !settings.music) return;
+      safely(() => {
+        music.seekTo(0);
+        music.play();
+      });
+    });
   });
 
   // Warm the one-shots so the first word of the first round isn't late.
@@ -80,7 +105,7 @@ export const initAudio = async () => {
     // Before the mute branch: equipping a track while muted must still take
     // effect, so that unmuting later starts the one that was chosen.
     setMusicTrack(settings.trackKey);
-    if (music) safely(() => { music.volume = settings.musicVolume; });
+    if (music) safely(() => { music.volume = cleanVolume(settings.musicVolume); });
     if (settings.muted || !settings.music) stopMusic();
     else if (musicWanted) startMusic();
   });
@@ -125,8 +150,30 @@ export const startMusic = () => {
   const settings = getSettings();
   if (settings.muted || !settings.music || !music) return;
   safely(() => {
-    music.volume = getSettings().musicVolume;
+    // Re-asserted on every start: it costs nothing, and it covers a player that
+    // was rebuilt by replace() on a platform that does not carry the flag over.
+    music.loop = true;
+    music.volume = cleanVolume(settings.musicVolume);
+
+    // A finished player sits at its end, where play() does nothing at all -
+    // the same reason the one-shot pools seek before every play. Without this,
+    // one silent track meant a silent app until the next launch.
+    const status = music.currentStatus;
+    if (status && status.duration > 0 && status.currentTime >= status.duration - 0.25) {
+      music.seekTo(0);
+    }
+
     music.play();
+  });
+};
+
+/**
+ * The music volume while the settings slider is being dragged: heard at once,
+ * saved on release (which then lands here again through the subscription).
+ */
+export const previewMusicVolume = (volume) => {
+  safely(() => {
+    if (music) music.volume = volume;
   });
 };
 
@@ -169,7 +216,7 @@ export const setMusicTrack = (key) => {
   safely(() => {
     music.replace(MUSIC[wanted] || MUSIC[DEFAULT_TRACK]);
     music.loop = true;
-    music.volume = getSettings().musicVolume;
+    music.volume = cleanVolume(getSettings().musicVolume);
   });
 };
 

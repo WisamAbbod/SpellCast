@@ -6,6 +6,9 @@
  * order to find the old data.
  */
 
+// Deliberately still the old name. The app is Spacewrite now, but this
+// prefix is the address of every player's streak, history and stardust -
+// renaming it would orphan all of it on every device already out there.
 const PREFIX = 'spellcast/';
 
 export const KEYS = {

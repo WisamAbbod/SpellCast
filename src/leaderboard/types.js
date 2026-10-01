@@ -27,4 +27,11 @@
  * a leaderboard is never allowed to break a results screen.
  */
 
-export const LEADERBOARD_LIMIT = 25;
+// One fetch of the top hundred - a few kilobytes - then revealed a page at a
+// time on screen, so "More" is instant and costs no further requests.
+export const LEADERBOARD_LIMIT = 100;
+export const LEADERBOARD_PAGE = 20;
+
+/** How many rows to show after one more press of "More". */
+export const revealMore = (shown, available) =>
+  Math.min(shown + LEADERBOARD_PAGE, available, LEADERBOARD_LIMIT);

@@ -1,4 +1,3 @@
-import { InteractionManager } from 'react-native';
 import { initAudio, startMusic } from '../audio/audio.js';
 import { warmDictionary } from '../game/dictionary.js';
 import { flushLeaderboardQueue } from '../leaderboard/index.js';
@@ -6,7 +5,8 @@ import { store } from '../storage/asyncStore.js';
 import { runMigrations } from '../storage/migrations.js';
 import { loadProfile, saveProfile } from '../storage/profile.js';
 import { loadSettings } from '../storage/settings.js';
-import { credit } from '../storage/wallet.js';
+import { credit, devGrant } from '../storage/wallet.js';
+import { runWhenIdle } from './idle.js';
 
 /** The most a returning player can be handed for the play they already did. */
 const FOUNDER_GRANT_CAP = 400;
@@ -35,6 +35,17 @@ const grantFounderStardust = async (profile) => {
 };
 
 /**
+ * The developer's own stardust, for trying the shop. Two locks, and it needs
+ * both: the amount lives in the gitignored .env, so it exists on one machine;
+ * and __DEV__ is false in every build a player can install, so even a release
+ * bundle made ON that machine grants nothing.
+ */
+const DEV_STARDUST =
+  typeof __DEV__ !== 'undefined' && __DEV__
+    ? Number(process.env.EXPO_PUBLIC_DEV_STARDUST) || 0
+    : 0;
+
+/**
  * What has to happen before the first screen appears, and what can wait.
  *
  * Blocking: migrations, settings and profile - screens read them synchronously.
@@ -44,9 +55,11 @@ const grantFounderStardust = async (profile) => {
 export const boot = async () => {
   await runMigrations(store);
   await loadSettings();
-  await grantFounderStardust(await loadProfile());
+  const profile = await grantFounderStardust(await loadProfile());
+  const topped = devGrant(profile, DEV_STARDUST);
+  if (topped !== profile) await saveProfile(topped);
 
-  InteractionManager.runAfterInteractions(() => {
+  runWhenIdle(() => {
     warmDictionary();
     initAudio();
     // Asked for here rather than when a round starts, so the menu is not

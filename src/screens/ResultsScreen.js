@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import Screen from '../components/Screen.js';
 import Button from '../components/Button.js';
@@ -9,9 +9,11 @@ import { colors, medalFor } from '../theme/colors.js';
 import { fonts } from '../theme/typography.js';
 import { radius, space } from '../theme/layout.js';
 import { formatShareText, parBlocks } from '../game/share.js';
-import { STARDUST_GLYPH } from '../game/economy.js';
+import { PRACTICE_DAILY_CAP, STARDUST_GLYPH } from '../game/economy.js';
 import { getLeaderboard } from '../leaderboard/index.js';
 import EarnedCard from '../components/EarnedCard.js';
+import Mascot from '../components/Mascot.js';
+import { moodForResult } from '../game/mascot.js';
 
 /**
  * What the round was worth.
@@ -24,6 +26,8 @@ const ResultsScreen = ({ nav, outcome, board, seed, cellSeed, dateKey, mode }) =
   const settings = useSettings();
   const { result, streak, submitted, earned } = outcome;
   const medal = medalFor(result.parPercent);
+  // A fixed key, so the reaction plays once on arrival and not on re-render.
+  const verdict = useMemo(() => ({ mood: moodForResult(medal.key), key: 1 }), [medal.key]);
   const [rank, setRank] = useState(null);
 
   const foundSet = new Set(result.words);
@@ -66,6 +70,7 @@ const ResultsScreen = ({ nav, outcome, board, seed, cellSeed, dateKey, mode }) =
   return (
     <Screen padded stars={settings.reducedMotion ? 0 : 24}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <Mascot size={112} reaction={verdict} roam={1.6} style={styles.mascot} />
         <Text style={styles.eyebrow}>
           {isDaily ? `PUZZLE #${result.puzzle}` : 'PRACTICE ROUND'}
         </Text>
@@ -113,7 +118,7 @@ const ResultsScreen = ({ nav, outcome, board, seed, cellSeed, dateKey, mode }) =
           emptyNote={
             isDaily
               ? `Today's ${STARDUST_GLYPH} was already paid for this puzzle.`
-              : `Practice tops out at 15 ${STARDUST_GLYPH} a day. Come back tomorrow.`
+              : `Practice tops out at ${PRACTICE_DAILY_CAP} ${STARDUST_GLYPH} a day. Come back tomorrow.`
           }
         />
 
@@ -179,6 +184,7 @@ const ResultsScreen = ({ nav, outcome, board, seed, cellSeed, dateKey, mode }) =
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: space.xl, gap: space.sm },
+  mascot: { marginTop: space.md },
   eyebrow: {
     fontFamily: fonts.body, fontSize: 11, letterSpacing: 3,
     color: colors.textFaint, textAlign: 'center', marginTop: space.md,

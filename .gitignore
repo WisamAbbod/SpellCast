@@ -30,7 +30,13 @@ yarn-error.*
 *.pem
 
 # local env files
+# .env holds the Supabase keys. The anon key ends up in the app bundle anyway,
+# but this is the file someone eventually pastes a service_role key into.
+.env
 .env*.local
+# A Supabase personal access token for setup scripts. Account-level access -
+# it must never be committed, and the app itself never needs it.
+.supabase-token
 
 # typescript
 *.tsbuildinfo

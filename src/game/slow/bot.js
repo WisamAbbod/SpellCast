@@ -1,7 +1,8 @@
 import { makeRng, rngInt } from '../rng.js';
 import { BOT_LEVELS, BOT_SHUFFLE_THRESHOLD, DEFAULT_BOT_LEVEL, ABILITIES } from './rules.js';
 import { analyseSlowBoard, slowSeed } from './board.js';
-import { scoreSlowWord, countGems } from './scoring.js';
+import { scoreSlowWord, countGems, slowLetterValue } from './scoring.js';
+import { characterFor } from './characters.js';
 
 /**
  * The bots.
@@ -53,8 +54,37 @@ export const rankBotOptions = (board, usedWords = [], minLength = 3) => {
   return options;
 };
 
+/*
+ * Tastes: what a character reaches for, once difficulty has decided how good a
+ * word they are allowed. Higher is more appealing. Each is cheap arithmetic on
+ * an option rankBotOptions already built.
+ */
+const TASTE = {
+  short: (option) => -option.word.length,
+  long: (option) => option.word.length,
+  gems: (option) => option.gems,
+  // Only the letters worth four or more count, so a word is "rare" because of
+  // its Q or its Z rather than because it is long.
+  rare: (option) =>
+    option.word.split('').reduce((sum, letter) => {
+      const value = slowLetterValue(letter);
+      return sum + (value >= 4 ? value : 0);
+    }, 0),
+  bonus: (option, board) =>
+    option.indices.reduce((sum, index) => sum + (board.modifiers[index] ? 1 : 0), 0),
+};
+
+/** Rigel's excuse to shuffle: anything under this is "boring". */
+const EAGER_SHUFFLE_THRESHOLD = 14;
+/** Nova's quick turns. */
+const QUICK_THINK_SCALE = 0.6;
+
 /**
  * Picks this turn's word.
+ *
+ * Difficulty picks the band; character picks within it. With no character (a
+ * bot someone renamed, or any bot in the tests) the choice is exactly what it
+ * always was: one seeded draw across the band.
  * @returns {{word, indices, score, gems}|null} null when the board is barren
  */
 export const chooseBotWord = (state, options) => {
@@ -71,7 +101,25 @@ export const chooseBotWord = (state, options) => {
   const to = Math.min(last, Math.round(high * last));
   const span = Math.max(0, to - from);
 
-  return list[from + (span > 0 ? rngInt(rng, span + 1) : 0)];
+  const character = characterFor(player);
+  const taste = character && TASTE[character.taste];
+
+  if (!taste || span === 0) {
+    return list[from + (span > 0 ? rngInt(rng, span + 1) : 0)];
+  }
+
+  // Re-rank only the band, then draw from its more appealing half. Still one
+  // seeded draw, so a game replays identically; still inside the band, so the
+  // difficulty is untouched.
+  const band = list.slice(from, to + 1);
+  band.sort(
+    (a, b) =>
+      taste(b, state.board) - taste(a, state.board) ||
+      b.value - a.value ||
+      a.word.localeCompare(b.word),
+  );
+  const top = Math.max(1, Math.ceil(band.length / 2));
+  return band[rngInt(rng, top)];
 };
 
 /**
@@ -92,10 +140,15 @@ export const planBotTurn = (state) => {
   const options = rankBotOptions(state.board, state.usedWords, level.minLength);
   const best = chooseBotWord(state, options);
 
-  const canShuffle = player.gems >= ABILITIES.shuffle.cost;
-  const weak = !best || best.score < BOT_SHUFFLE_THRESHOLD;
+  const character = characterFor(player);
+  const threshold =
+    character && character.taste === 'shuffle' ? EAGER_SHUFFLE_THRESHOLD : BOT_SHUFFLE_THRESHOLD;
+  const thinkScale = character && character.taste === 'short' ? QUICK_THINK_SCALE : 1;
 
-  return { shuffle: canShuffle && weak, thinkMs: level.thinkMs };
+  const canShuffle = player.gems >= ABILITIES.shuffle.cost;
+  const weak = !best || best.score < threshold;
+
+  return { shuffle: canShuffle && weak, thinkMs: Math.round(level.thinkMs * thinkScale) };
 };
 
 export const botLevelLabel = (key) => levelFor(key).label;

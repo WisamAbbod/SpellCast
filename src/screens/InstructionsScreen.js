@@ -14,7 +14,7 @@ import {
 } from '../game/economy.js';
 import {
   ABILITIES, LONG_WORD_BONUS, LONG_WORD_MIN, MAX_GEMS, MAX_PLAYERS,
-  MIN_PLAYERS, POINTS_PER_LEFTOVER_GEM, SLOW_ROUNDS, TURN_SECONDS,
+  MIN_PLAYERS, POINTS_PER_LEFTOVER_GEM, SLOW_ROUNDS, STARTING_GEMS, TURN_SECONDS,
 } from '../game/slow/rules.js';
 
 const Rule = ({ icon, title, children }) => (
@@ -79,19 +79,21 @@ const InstructionsScreen = ({ nav }) => (
           finishing the daily, more for the medal you earn, and a lump sum the
           day your streak reaches 3, 7, 14 or 30.
           {'\n\n'}
-          Practice pays a quarter as much and stops at {PRACTICE_DAILY_CAP} a
-          day; slow mode pays a flat {SLOW_COMPLETION_BONUS}, plus{' '}
-          {SLOW_WIN_BONUS} if you win. Spend it in the shop on backgrounds and
+          Practice pays a reduced rate and stops at {PRACTICE_DAILY_CAP} a day;
+          offline mode pays a flat {SLOW_COMPLETION_BONUS}, plus {SLOW_WIN_BONUS}{' '}
+          if you win. Spend it in the shop on backgrounds and
           soundtracks — you can preview anything before you buy it, and what you
           buy is yours for good.
         </Text>
       </Card>
 
-      <Card title="Slow mode" style={styles.card}>
+      <Card title="Offline mode" style={styles.card}>
         <Text style={styles.body}>
           A different game on the same board. {MIN_PLAYERS}–{MAX_PLAYERS} players
           share one phone and take turns, for {SLOW_ROUNDS} rounds each. Bots can
-          fill any empty seat.
+          fill any empty seat, and each one is a character with their own taste
+          in words — Orion hunts long ones, Vega grabs gems. Tap a bot in setup
+          to meet them.
         </Text>
         <View style={styles.spacer} />
         <Rule icon="◆" title="Letters carry the value">
@@ -99,7 +101,7 @@ const InstructionsScreen = ({ nav }) => (
           A, E, I and O are worth one, so a short, expensive word can beat a
           long, cheap one. Words of {LONG_WORD_MIN} letters or more add a flat
           +{LONG_WORD_BONUS}. The number in the corner of each tile is that
-          letter’s value — slow mode prices them 1 to 8, and most letters cost
+          letter’s value — offline mode prices them 1 to 8, and most letters cost
           something different here to what they cost on the daily board.
         </Rule>
         <Rule icon="2x" title="Tiles move every turn">
@@ -108,7 +110,8 @@ const InstructionsScreen = ({ nav }) => (
           next player sees is never the one you played on.
         </Rule>
         <Rule icon="◇" title="Gems buy abilities">
-          Cover a gem tile with your word to collect it, up to {MAX_GEMS}.
+          Everyone starts with {STARTING_GEMS}. Cover a gem tile with your word
+          to collect another, up to {MAX_GEMS}.
           Shuffle costs {ABILITIES.shuffle.cost}, swapping a letter costs{' '}
           {ABILITIES.swap.cost}, and a hint costs {ABILITIES.hint.cost}. Every
           gem you finish holding is worth {POINTS_PER_LEFTOVER_GEM} point, so
@@ -116,7 +119,7 @@ const InstructionsScreen = ({ nav }) => (
         </Rule>
         <Rule icon="⏱" title="Optional clock">
           Switch the timer on and each turn lasts {TURN_SECONDS} seconds. One gem
-          buys more time.
+          resets the clock to a full {TURN_SECONDS} - twice a turn at most.
         </Rule>
       </Card>
 

@@ -38,7 +38,7 @@ export const formatShareText = ({
 }) => {
   const number = puzzle || (dateKey ? puzzleNumber(dateKey) : 0);
   const lines = [
-    `SpellCast #${number}`,
+    `Spacewrite #${number}`,
     `${score.toLocaleString()} pts · ${wordCount} word${wordCount === 1 ? '' : 's'}`,
     `${parBlocks(score, par)}  ${parPercent(score, par)}% of par`,
   ];

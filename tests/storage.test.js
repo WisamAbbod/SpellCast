@@ -95,3 +95,45 @@ check('...and never inflates daily stats', afterPractice.daily.bestScore, 900);
 check('...or the streak', afterPractice.streak.current, 2);
 
 module.exports = run;
+
+/* ---- the player's name ------------------------------------------------ */
+{
+  const { cleanName, needsWelcome, NAME_LIMIT } = loadSrc('src/storage/schema.js');
+  check('a name is trimmed', cleanName('  Wisam  '), 'Wisam');
+  check('inner runs of spaces collapse', cleanName('Big    Al'), 'Big Al');
+  check(`a name is capped at ${NAME_LIMIT}`, cleanName('Abcdefghijklmnop').length, NAME_LIMIT);
+  check('a cap never leaves a trailing space', cleanName('Abcdefghijk lmnop'), 'Abcdefghijk');
+  check('nothing at all is no name', cleanName(undefined), '');
+  ok('a new player is welcomed', needsWelcome({ welcomed: false, displayName: '' }));
+  ok('someone who already has a name is not', !needsWelcome({ welcomed: false, displayName: 'Ada' }));
+  ok('someone who skipped is not asked again', !needsWelcome({ welcomed: true, displayName: '' }));
+  ok('a name of only spaces still counts as none', needsWelcome({ welcomed: false, displayName: '   ' }));
+}
+
+
+/* ---- volumes --------------------------------------------------------------- */
+{
+  const { cleanVolume, DEFAULT_SETTINGS } = loadSrc('src/storage/schema.js');
+  check('a volume is kept to the percent', cleanVolume(0.4567), 0.46);
+  check('a volume above full is full', cleanVolume(1.7), 1);
+  check('a volume below silent is silent', cleanVolume(-0.2), 0);
+  check('silent is a real choice, not a missing value', cleanVolume(0), 0);
+  check('garbage falls back to the default music volume', cleanVolume('loud'), DEFAULT_SETTINGS.musicVolume);
+  check('NaN falls back too', cleanVolume(NaN), DEFAULT_SETTINGS.musicVolume);
+  check('null falls back rather than meaning silent', cleanVolume(null), DEFAULT_SETTINGS.musicVolume);
+  check('a numeric string from old storage still reads', cleanVolume('0.3'), 0.3);
+}
+
+
+/* ---- leaderboard paging ------------------------------------------------------ */
+{
+  const { LEADERBOARD_LIMIT, LEADERBOARD_PAGE, revealMore } = loadSrc('src/leaderboard/types.js');
+  check('the board fetches a hundred', LEADERBOARD_LIMIT, 100);
+  check('"More" reveals another page', revealMore(LEADERBOARD_PAGE, 100), LEADERBOARD_PAGE * 2);
+  check('...but never past who actually played', revealMore(20, 27), 27);
+  check('...nor past the hundred', revealMore(95, 500), 100);
+  let shown = LEADERBOARD_PAGE;
+  let presses = 0;
+  while (shown < 100 && presses < 50) { shown = revealMore(shown, 100); presses++; }
+  check('four presses take twenty to a hundred', presses, 4);
+}

@@ -3,16 +3,18 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from
 import Screen from '../components/Screen.js';
 import Button from '../components/Button.js';
 import Sheet from '../components/Sheet.js';
+import Slider from '../components/Slider.js';
 import { Card } from '../components/Stat.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { colors } from '../theme/colors.js';
 import { fonts } from '../theme/typography.js';
 import { radius, space } from '../theme/layout.js';
 import { resetSettings, saveSettings } from '../storage/settings.js';
+import { NAME_LIMIT, cleanName, cleanVolume } from '../storage/schema.js';
 import { clearProfileCache, resetProfile } from '../storage/profile.js';
 import { clearDailyHistory } from '../storage/dailyResults.js';
 import { clearQueue } from '../storage/queue.js';
-import { startMusic, stopMusic, tapFeedback } from '../audio/audio.js';
+import { previewMusicVolume, startMusic, stopMusic, tapFeedback } from '../audio/audio.js';
 import { backgroundFor } from '../theme/backgrounds.js';
 import { trackFor } from '../audio/tracks.js';
 
@@ -55,9 +57,33 @@ const LinkRow = ({ label, hint, value, onPress }) => (
   </Pressable>
 );
 
+/** A labelled slider with its value as a percentage. */
+const VolumeRow = ({ label, hint, value, dimmed, onChange, onCommit }) => {
+  const percent = Math.round(value * 100);
+  return (
+    <View style={styles.volume}>
+      <View style={styles.volumeHead}>
+        <View style={styles.rowText}>
+          <Text style={styles.rowLabel}>{label}</Text>
+          {!!hint && <Text style={styles.rowHint}>{hint}</Text>}
+        </View>
+        <Text style={[styles.volumeValue, dimmed && styles.volumeValueDim]}>
+          {percent === 0 ? 'Silent' : `${percent}%`}
+        </Text>
+      </View>
+      <Slider label={label} value={value} dimmed={dimmed} onChange={onChange} onCommit={onCommit} />
+    </View>
+  );
+};
+
 const SettingsScreen = ({ nav }) => {
   const settings = useSettings();
   const [name, setName] = useState(settings.displayName);
+  // The thumb's position mid-drag. Null when idle, so the slider otherwise
+  // shows the saved value - including one changed elsewhere.
+  const [dragVolume, setDragVolume] = useState(null);
+  const musicVolume = dragVolume === null ? cleanVolume(settings.musicVolume) : dragVolume;
+  const musicSilenced = settings.muted || !settings.music;
   const [confirmReset, setConfirmReset] = useState(false);
 
   const wipe = async () => {
@@ -89,12 +115,29 @@ const SettingsScreen = ({ nav }) => {
           />
           <Row
             label="Music"
-            hint="Ambient loop, from the menu onwards"
+            hint="Plays from the menu onwards. Pick a track in the shop"
             value={settings.music}
             onValueChange={(value) => {
               saveSettings({ music: value });
               if (value && !settings.muted) startMusic();
               else stopMusic();
+            }}
+          />
+          {/* Adjustable even while the music is off, just dimmed: it is a
+              preference for when it comes back on, not a control of the
+              moment. */}
+          <VolumeRow
+            label="Music volume"
+            hint={musicSilenced ? 'Music is off' : null}
+            value={musicVolume}
+            dimmed={musicSilenced}
+            onChange={(value) => {
+              setDragVolume(value);
+              previewMusicVolume(value);
+            }}
+            onCommit={(value) => {
+              saveSettings({ musicVolume: cleanVolume(value) });
+              setDragVolume(null);
             }}
           />
           <Row
@@ -131,18 +174,18 @@ const SettingsScreen = ({ nav }) => {
           />
         </Card>
 
-        <Card title="Leaderboard name" style={styles.card}>
+        <Card title="Your name" style={styles.card}>
           <TextInput
             value={name}
             onChangeText={setName}
-            onEndEditing={() => saveSettings({ displayName: name.trim().slice(0, 24) })}
+            onEndEditing={() => saveSettings({ displayName: cleanName(name), welcomed: true })}
             placeholder="Anonymous"
             placeholderTextColor={colors.textFaint}
-            maxLength={24}
+            maxLength={NAME_LIMIT}
             style={styles.input}
-            accessibilityLabel="Leaderboard display name"
+            accessibilityLabel="Your name"
           />
-          <Text style={styles.hint}>Shown next to your daily score.</Text>
+          <Text style={styles.hint}>On the leaderboard and to other players online.</Text>
         </Card>
 
         <Card title="Data" style={styles.card}>
@@ -190,6 +233,10 @@ const styles = StyleSheet.create({
   rowHint: { fontFamily: fonts.body, fontSize: 11, color: colors.textFaint, marginTop: 2 },
   rowValue: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.stardust },
   rowChevron: { fontSize: 20, color: colors.textFaint, marginLeft: -6 },
+  volume: { paddingTop: space.sm, paddingBottom: space.xs },
+  volumeHead: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  volumeValue: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.text, minWidth: 44, textAlign: 'right' },
+  volumeValueDim: { color: colors.textFaint },
   input: {
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: radius.sm,

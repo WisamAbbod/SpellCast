@@ -7,6 +7,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SCREENS } from './src/navigation/screens.js';
 import { useNavigator } from './src/navigation/useNavigator.js';
 import { boot } from './src/session/boot.js';
+import { getSettings } from './src/storage/settings.js';
+import { needsWelcome } from './src/storage/schema.js';
 import { colors } from './src/theme/colors.js';
 import { fontAssets } from './src/theme/typography.js';
 
@@ -20,7 +22,12 @@ export default function App() {
   useEffect(() => {
     boot()
       .catch(() => {})
-      .finally(() => setReady(true));
+      .finally(() => {
+        // Decided before the first frame, in the same batch as `ready`, so a new
+        // player never glimpses the menu before being asked their name.
+        if (needsWelcome(getSettings())) nav.reset('welcome');
+        setReady(true);
+      });
   }, []);
 
   useEffect(() => {

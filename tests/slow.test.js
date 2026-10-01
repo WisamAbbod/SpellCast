@@ -160,7 +160,11 @@ check('five rounds by default', start.rounds, rules.SLOW_ROUNDS);
 check('turns are rounds x players', game.totalTurns(start), 15);
 check('the first round is round 1', game.currentRound(start), 1);
 check('the first player leads', game.currentPlayer(start).name, 'Ann');
-check('everyone starts on zero', start.players.every((p) => p.score === 0 && p.gems === 0), true);
+check('everyone starts on zero points', start.players.every((p) => p.score === 0), true);
+check('...holding the starting gems, as SpellCast did',
+  start.players.every((p) => p.gems === rules.STARTING_GEMS && p.gemsCollected === 0), true);
+ok('a starting purse buys a shuffle or a swap but not a hint',
+  rules.STARTING_GEMS >= rules.ABILITIES.swap.cost && rules.STARTING_GEMS < rules.ABILITIES.hint.cost);
 
 check(
   'one player is padded to the minimum',
@@ -295,7 +299,7 @@ check('shuffle costs a gem', rules.ABILITIES.shuffle.cost, 1);
 check('swap costs three gems', rules.ABILITIES.swap.cost, 3);
 check('hint costs four gems', rules.ABILITIES.hint.cost, 4);
 
-check('an ability you cannot afford is refused', game.applyAbility(abilityBase, 'shuffle').ok, false);
+check('an ability you cannot afford is refused', game.applyAbility(withGems(abilityBase, 0), 'shuffle').ok, false);
 
 const shuffledGame = game.applyAbility(withGems(abilityBase, 4), 'shuffle');
 ok('shuffle rearranges the board', shuffledGame.ok);
@@ -328,16 +332,16 @@ check('hint deducts four gems', hintGame.state.players[0].gems, 0);
 check('hint leaves the board alone', hintGame.state.board.letters.join(''), abilityBase.board.letters.join(''));
 
 check(
-  'extending time needs the timer switched on',
+  'resetting the clock needs the timer switched on',
   game.applyAbility(withGems(abilityBase, 4), 'extend').ok,
   false,
 );
 const timed = game.createSlowGame({ seed: 'g6', players: [{ name: 'A' }, { name: 'B' }], timerEnabled: true });
 const extended = game.applyAbility(withGems(timed, 4), 'extend');
-ok('extending time works when it is on', extended.ok);
-check('extending is counted', extended.state.extensions, 1);
+ok('resetting the clock works when it is on', extended.ok);
+check('each reset is counted', extended.state.extensions, 1);
 check(
-  'time can only be bought so many times',
+  'the clock can only be reset so many times a turn',
   (() => {
     let state = withGems(timed, 9);
     for (let i = 0; i < rules.MAX_EXTENSIONS_PER_TURN; i++) {

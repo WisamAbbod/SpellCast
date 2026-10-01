@@ -10,15 +10,23 @@ import { radius, space } from '../theme/layout.js';
  * The one button. Variants rather than a new set of styles per screen, and a
  * 48px minimum height everywhere so nothing is fiddly to hit.
  */
+/*
+ * Accent: the one button on a screen that should stand apart from the rest -
+ * on the menu, playing online. Cyan rather than another purple, with dark text,
+ * because white on a bright cyan is hard to read and dark on it is not.
+ */
+const ACCENT_GRADIENT = [colors.accent, '#25B4C8'];
+
 const Button = ({
   label,
   onPress,
-  variant = 'primary', // primary | secondary | ghost | danger
+  variant = 'primary', // primary | secondary | ghost | danger | accent
   icon,
   disabled = false,
   subtitle,
   style,
   accessibilityLabel,
+  fit = false, // keep the label on one line, shrinking it if it must (half-width buttons)
 }) => {
   const handlePress = () => {
     if (disabled) return;
@@ -28,10 +36,25 @@ const Button = ({
 
   const content = (
     <View style={styles.inner}>
-      {!!icon && <Text style={styles.icon}>{icon}</Text>}
+      {!!icon && <Text style={[styles.icon, variant === 'accent' && styles.onAccent]}>{icon}</Text>}
       <View style={styles.labels}>
-        <Text style={[styles.label, variant === 'ghost' && styles.labelGhost]}>{label}</Text>
-        {!!subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+        <Text
+          style={[
+            styles.label,
+            variant === 'ghost' && styles.labelGhost,
+            variant === 'accent' && styles.onAccent,
+          ]}
+          // Opt-in: a long label elsewhere should wrap, not shrink to nothing.
+          numberOfLines={fit ? 1 : undefined}
+          adjustsFontSizeToFit={fit}
+        >
+          {label}
+        </Text>
+        {!!subtitle && (
+          <Text style={[styles.subtitle, variant === 'accent' && styles.subtitleOnAccent]}>
+            {subtitle}
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -53,9 +76,9 @@ const Button = ({
         style,
       ]}
     >
-      {variant === 'primary' && !disabled ? (
+      {(variant === 'primary' || variant === 'accent') && !disabled ? (
         <LinearGradient
-          colors={[colors.primary, '#5B3FE0']}
+          colors={variant === 'accent' ? ACCENT_GRADIENT : [colors.primary, '#5B3FE0']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
@@ -94,7 +117,9 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.82, transform: [{ scale: 0.985 }] },
   inner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   labels: { alignItems: 'center' },
-  icon: { fontSize: 20, marginRight: space.sm },
+  // Coloured like the label. Left unset it fell back to the platform default,
+  // which is black - near invisible on every dark button.
+  icon: { fontSize: 20, marginRight: space.sm, color: colors.text },
   label: {
     color: colors.text,
     fontFamily: fonts.displayBold,
@@ -102,6 +127,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   labelGhost: { fontFamily: fonts.bodySemi, letterSpacing: 0.4, color: colors.textDim },
+  onAccent: { color: colors.tileText },
+  subtitleOnAccent: { color: 'rgba(27, 26, 51, 0.72)' },
   subtitle: {
     color: 'rgba(255,255,255,0.72)',
     fontFamily: fonts.body,

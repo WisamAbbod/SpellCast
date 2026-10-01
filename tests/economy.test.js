@@ -12,13 +12,14 @@ const { suite, check, ok } = require('./harness.js');
 const { loadSrc } = require('./load.js');
 
 const {
-  DAILY_COMPLETION_BONUS, PRACTICE_DAILY_CAP, SLOW_DAILY_CAP,
+  DAILY_COMPLETION_BONUS, PRACTICE_DAILY_CAP, PRACTICE_RATE, SLOW_DAILY_CAP,
+  SLOW_COMPLETION_BONUS, SLOW_WIN_BONUS, STREAK_MILESTONES,
   earnedForDaily, earnedForPractice, earnedForSlow,
   stardustForScore, streakBonusFor,
 } = loadSrc('src/game/economy.js');
 
 const {
-  balanceOf, canAfford, credit, owns, purchase, remainingFor, rollEarn,
+  balanceOf, canAfford, credit, devGrant, owns, purchase, remainingFor, rollEarn,
 } = loadSrc('src/storage/wallet.js');
 
 const { DEFAULT_PROFILE, withDefaults } = loadSrc('src/storage/schema.js');
@@ -27,26 +28,29 @@ const {
   BACKGROUNDS, BACKGROUND_ORDER, DEFAULT_BACKGROUND, backgroundFor,
 } = loadSrc('src/theme/backgrounds.js');
 
-const { TRACKS, TRACK_ORDER, DEFAULT_TRACK, trackFor } = loadSrc('src/audio/tracks.js');
+const { TRACKS, TRACK_ORDER, DEFAULT_TRACK, trackFor, formatLength } = loadSrc('src/audio/tracks.js');
+const { COSTUMES, COSTUME_ORDER, DEFAULT_COSTUME, costumeFor, isPremium } = loadSrc('src/theme/costumes.js');
+const fs = require('fs');
+const path = require('path');
 
 /* ------------------------------------------------------------- economy -- */
 
 suite('economy');
 
-check('600 points is 6 stardust', stardustForScore(600), 6);
-check('100 points is exactly 1', stardustForScore(100), 1);
-check('99 points rounds down to nothing', stardustForScore(99), 0);
+check('600 points is 12 stardust', stardustForScore(600), 12);
+check('50 points is exactly 1', stardustForScore(50), 1);
+check('49 points rounds down to nothing', stardustForScore(49), 0);
 check('a negative score cannot pay out', stardustForScore(-5), 0);
-check('the practice rate quarters it', stardustForScore(600, 0.25), 1);
+check('the practice rate reduces it', stardustForScore(600, PRACTICE_RATE), 4);
 
 const typical = earnedForDaily({ score: 600, medalKey: 'silver', streak: 2 });
-check('a typical silver daily pays 22', typical.total, 22);
+check('a typical silver daily pays 57', typical.total, 57);
 check('...itemised into score, completion and medal', typical.lines.length, 3);
 ok('...and the lines add up to the total',
   typical.lines.reduce((sum, entry) => sum + entry.amount, 0) === typical.total);
 
 const perfect = earnedForDaily({ score: 1100, medalKey: 'platinum', streak: 30 });
-check('platinum on the thirtieth day pays 241', perfect.total, 241);
+check('platinum on the thirtieth day pays 457', perfect.total, 457);
 
 const zero = earnedForDaily({ score: 0, medalKey: 'none', streak: 0 });
 check('finishing with nothing still pays the completion bonus', zero.total, DAILY_COMPLETION_BONUS);
@@ -56,10 +60,10 @@ check('a daily already claimed pays nothing', replayed.total, 0);
 check('...and itemises nothing', replayed.lines.length, 0);
 ok('...and says so', replayed.claimed === true);
 
-check('three days is a milestone', streakBonusFor(3), 15);
-check('seven days is a bigger one', streakBonusFor(7), 40);
+check('three days is a milestone', streakBonusFor(3), 30);
+check('seven days is a bigger one', streakBonusFor(7), 75);
 check('eight days is not a milestone', streakBonusFor(8), 0);
-check('thirty days is the last one', streakBonusFor(30), 200);
+check('thirty days is the last one', streakBonusFor(30), 350);
 check('thirty-one pays nothing extra', streakBonusFor(31), 0);
 
 const grind = earnedForPractice({ score: 4000, remaining: 5 });
@@ -67,17 +71,17 @@ check('practice is clipped to what is left of the cap', grind.total, 5);
 ok('...and admits it was clipped', grind.capped === true);
 
 const modest = earnedForPractice({ score: 400, remaining: PRACTICE_DAILY_CAP });
-check('an ordinary practice round pays 1', modest.total, 1);
+check('an ordinary practice round pays 3', modest.total, 3);
 ok('...uncapped', modest.capped === false);
 check('a practice round worth nothing itemises nothing',
-  earnedForPractice({ score: 50, remaining: 15 }).lines.length, 0);
+  earnedForPractice({ score: 20, remaining: 40 }).lines.length, 0);
 
 check('passing until the whistle pays nothing',
   earnedForSlow({ humanWords: 2, humanWon: true, remaining: 30 }).total, 0);
-check('winning a real slow game pays 15',
-  earnedForSlow({ humanWords: 9, humanWon: true, remaining: SLOW_DAILY_CAP }).total, 15);
-check('losing one still pays 8',
-  earnedForSlow({ humanWords: 9, humanWon: false, remaining: SLOW_DAILY_CAP }).total, 8);
+check('winning a real slow game pays 40',
+  earnedForSlow({ humanWords: 9, humanWon: true, remaining: SLOW_DAILY_CAP }).total, 40);
+check('losing one still pays 20',
+  earnedForSlow({ humanWords: 9, humanWon: false, remaining: SLOW_DAILY_CAP }).total, 20);
 
 const clipped = earnedForSlow({ humanWords: 9, humanWon: true, remaining: 4 });
 check('a clipped slow payout collapses to one honest line', clipped.lines.length, 1);
@@ -244,17 +248,91 @@ const catalogue = (entries, order, defaultKey, label) => {
 
 catalogue(BACKGROUNDS, BACKGROUND_ORDER, DEFAULT_BACKGROUND, 'background');
 catalogue(TRACKS, TRACK_ORDER, DEFAULT_TRACK, 'track');
+catalogue(COSTUMES, COSTUME_ORDER, DEFAULT_COSTUME, 'costume');
+ok('an unknown costume means no costume', costumeFor('tutu') === COSTUMES[DEFAULT_COSTUME]);
+ok('"constructor" is not a costume', costumeFor('constructor') === COSTUMES[DEFAULT_COSTUME]);
 
 ok('an unknown background falls back to the default',
   backgroundFor('does-not-exist') === BACKGROUNDS[DEFAULT_BACKGROUND]);
 ok('so does no background at all', backgroundFor(undefined) === BACKGROUNDS[DEFAULT_BACKGROUND]);
 ok('an unknown track falls back too', trackFor('nope') === TRACKS[DEFAULT_TRACK]);
 
+/* The music is other people's work, so every track carries who made it and
+   under what licence - exactly as on its page. */
+ok('every track credits its author, licence and source page',
+  TRACK_ORDER.every((key) => {
+    const credit = TRACKS[key].credit;
+    return credit && credit.author && credit.license === 'CC0' &&
+      /^https:\/\/opengameart\.org\/content\/[a-z0-9-]+$/.test(credit.url);
+  }));
+check('a length reads as minutes and seconds', formatLength(68.6), '1:09');
+check('...including long ones', formatLength(314.6), '5:15');
+
+/* sounds.js cannot be loaded under node (it require()s audio files), so read it
+   as text: every key it maps must be a catalog track, every catalog track must
+   be mapped, and every file it points at must exist. A typo in a path otherwise
+   only shows up as silence on a phone. */
+const soundsSource = fs.readFileSync(path.join(__dirname, '..', 'src/audio/sounds.js'), 'utf8');
+const musicBlock = soundsSource.slice(soundsSource.indexOf('export const MUSIC'));
+const mapped = [...musicBlock.matchAll(/^\s+(\w+): require\('([^']+)'\)/gm)].map((m) => ({ key: m[1], file: m[2] }));
+check('every catalog track has a music file mapped, and nothing else is',
+  mapped.map((m) => m.key).sort().join(','), [...TRACK_ORDER].sort().join(','));
+const missing = mapped.filter((m) => !fs.existsSync(path.join(__dirname, '..', 'src/audio', m.file)));
+check('every mapped music file exists', missing.map((m) => m.file).join(','), '');
+
+// Everything the shop sells. Costumes count: the pacing promise is about
+// owning the whole shop, not just some of it.
 const total =
   BACKGROUND_ORDER.reduce((sum, key) => sum + BACKGROUNDS[key].price, 0) +
-  TRACK_ORDER.reduce((sum, key) => sum + TRACKS[key].price, 0);
-ok(`the whole catalog costs ${total} stardust, which is a season of play, not a decade`,
-  total > 0 && total < 3000);
+  TRACK_ORDER.reduce((sum, key) => sum + TRACKS[key].price, 0) +
+  COSTUME_ORDER.reduce((sum, key) => sum + COSTUMES[key].price, 0);
+/*
+ * Pacing, asserted rather than assumed.
+ *
+ * The first pass at these rates was miserly - fourteen weeks of perfect
+ * attendance to own everything - and nothing caught it, because every
+ * individual number looked reasonable on its own. This models an actual player:
+ * one silver daily a day, plus the streak milestones as they land.
+ */
+const TYPICAL_DAILY = earnedForDaily({ score: 600, medalKey: 'silver', streak: 2 }).total;
+const ALL_MILESTONES = STREAK_MILESTONES.reduce((sum, entry) => sum + entry.bonus, 0);
+
+/*
+ * Two promises since the premium suits arrived, because one number can no
+ * longer hold both: a casual player should own the everyday shop in about
+ * three months of dailies alone, and an engaged one - a daily plus a capped
+ * practice session and an offline game - should own EVERYTHING, suits
+ * included, inside three. What stays fixed is the gap to the next purchase:
+ * the cheapest item is still days away, not weeks (below).
+ */
+const premiumTotal = COSTUME_ORDER.filter((key) => isPremium(COSTUMES[key]))
+  .reduce((sum, key) => sum + COSTUMES[key].price, 0);
+const everyday = total - premiumTotal;
+const daysToClear = Math.ceil((everyday - ALL_MILESTONES) / TYPICAL_DAILY);
+ok(
+  `the everyday shop costs ${everyday}, cleared in ~${daysToClear} days of dailies alone`,
+  daysToClear >= 14 && daysToClear <= 90,
+  `        ${daysToClear} days at ${TYPICAL_DAILY}/day - under 14 is trivial, over 90 is a slog`,
+);
+
+const ENGAGED_DAILY = TYPICAL_DAILY + PRACTICE_DAILY_CAP + SLOW_COMPLETION_BONUS + SLOW_WIN_BONUS / 2;
+const daysToOwnAll = Math.ceil((total - ALL_MILESTONES) / ENGAGED_DAILY);
+ok(
+  `the whole shop costs ${total}, owned in ~${daysToOwnAll} days by an engaged player`,
+  daysToOwnAll >= 21 && daysToOwnAll <= 90,
+  `        ${daysToOwnAll} days at ${ENGAGED_DAILY}/day`,
+);
+// The premium promise is per SUIT, not for the rack. Nobody needs all of them,
+// and a bound on the total would mean every new suit made the others feel
+// further away - or could not be added at all.
+const premiumPrices = COSTUME_ORDER.filter((key) => isPremium(COSTUMES[key])).map((key) => COSTUMES[key].price);
+ok('a premium suit is a real goal: at least two weeks of dailies',
+  premiumPrices.every((price) => price >= TYPICAL_DAILY * 14));
+ok('...and a reachable one: never more than a month of them',
+  premiumPrices.every((price) => price <= TYPICAL_DAILY * 30));
+ok(`a daily is worth ${TYPICAL_DAILY}, enough that the cheapest item is days away not weeks`,
+  TYPICAL_DAILY * 4 >= Math.min(...BACKGROUND_ORDER.filter((k) => BACKGROUNDS[k].price > 0)
+    .map((k) => BACKGROUNDS[k].price)));
 
 /* The constraint the entire "don't build a theme system" decision rests on: the
    ~21 module-scope stylesheets assume a dark backdrop, so every background has
@@ -320,3 +398,52 @@ ok('the continuously-moving motions are not the densest',
     const p = BACKGROUNDS[key].particles;
     return p.motion === 'twinkle' || p.motion === 'drift' || p.density <= 0.7;
   }));
+
+/* ---- online --------------------------------------------------------------- */
+{
+  const { earnedForOnline, ONLINE_DAILY_CAP } = loadSrc('src/game/economy.js');
+  check('winning an online game pays 70', earnedForOnline({ myWords: 5, rank: 1 }).total, 70);
+  check('second pays 50', earnedForOnline({ myWords: 5, rank: 2 }).total, 50);
+  check('third pays 40', earnedForOnline({ myWords: 5, rank: 3 }).total, 40);
+  check('fourth still pays for finishing', earnedForOnline({ myWords: 5, rank: 4 }).total, 30);
+  check('sitting there playing one word pays nothing', earnedForOnline({ myWords: 1, rank: 1 }).total, 0);
+  const capped = earnedForOnline({ myWords: 5, rank: 1, remaining: 12 });
+  check('online respects its own daily cap', capped.total, 12);
+  check('...and itemises honestly when clipped', capped.lines.length, 1);
+  ok('the online budget is separate and bigger than slow mode\'s', ONLINE_DAILY_CAP > SLOW_DAILY_CAP);
+  check('a fresh earn ledger carries an online bucket',
+    rollEarn(null, '2026-10-01').online, 0);
+  check('remaining online starts at the full cap',
+    remainingFor(JSON.parse(JSON.stringify(DEFAULT_PROFILE)), 'online', '2026-10-01'), ONLINE_DAILY_CAP);
+}
+
+
+/* ---- costumes are owned like everything else --------------------------------- */
+{
+  check('a profile from before costumes existed owns none, without a migration',
+    withDefaults({ unlocks: { backgrounds: ['forest'], tracks: [] } }, DEFAULT_PROFILE).unlocks.costumes.length, 0);
+  const rich = credit(JSON.parse(JSON.stringify(DEFAULT_PROFILE)), 500);
+  const hatted = purchase(rich, 'costumes', 'wizard', COSTUMES.wizard.price);
+  ok('a costume can be bought', owns(hatted, 'costumes', 'wizard'));
+  ok('...without touching backgrounds or tracks',
+    hatted.unlocks.backgrounds.length === 0 && hatted.unlocks.tracks.length === 0);
+}
+
+
+/* ---- the developer's own top-up ----------------------------------------------- */
+{
+  const fresh = JSON.parse(JSON.stringify(DEFAULT_PROFILE));
+  ok('with no amount set, nothing is granted - the same object comes back', devGrant(fresh, 0) === fresh);
+  ok('junk is not an amount', devGrant(fresh, 'lots') === fresh && devGrant(fresh, -5) === fresh && devGrant(fresh, undefined) === fresh);
+  const topped = devGrant(fresh, 100000);
+  check('a top-up lands in the balance', balanceOf(topped), 100000);
+  ok('...and is not paid again on the next launch', devGrant(topped, 100000) === topped);
+  check('raising it pays only the difference', balanceOf(devGrant(topped, 150000)), 150000);
+  ok('lowering it takes nothing back', devGrant(topped, 500) === topped);
+  const spent = purchase(topped, 'costumes', 'mk2', COSTUMES.mk2.price);
+  ok('spending it does not earn a refill', devGrant(spent, 100000) === spent);
+  check('it touches no daily earning cap',
+    remainingFor(topped, 'practice', '2026-10-02'), PRACTICE_DAILY_CAP);
+  check('a player from before this existed has been given none',
+    withDefaults({ wallet: { balance: 7, lifetime: 7, spent: 0 } }, DEFAULT_PROFILE).devGrant, 0);
+}

@@ -1,17 +1,11 @@
 {
   "expo": {
-    "name": "SpellCast",
+    "name": "Spacewrite",
     "slug": "SpellCast",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#080711"
-    },
     "ios": {
       "supportsTablet": true
     },
@@ -31,7 +25,17 @@
       "expo-audio",
       "expo-font",
       "expo-sqlite",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#080711",
+          "imageWidth": 200
+        }
+      ],
+      "expo-status-bar"
     ]
   }
 }

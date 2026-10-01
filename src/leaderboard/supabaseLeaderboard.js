@@ -77,17 +77,26 @@ export const supabaseLeaderboard = {
     const supabase = getClient();
     if (!supabase) return { entries: [], source: 'none' };
 
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('*')
-      .eq('date', dateKey)
-      .eq('generator_version', GENERATOR_VERSION)
-      .order('score', { ascending: false })
-      .order('created_at', { ascending: true })
-      .limit(limit);
+    // Alongside, not before: who is asking only decides which row is
+    // highlighted, and must not hold the board up or take it down.
+    const [{ data, error }, session] = await Promise.all([
+      supabase
+        .from(TABLE)
+        .select('*')
+        .eq('date', dateKey)
+        .eq('generator_version', GENERATOR_VERSION)
+        .order('score', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(limit),
+      ensureSession().catch(() => null),
+    ]);
 
     if (error || !data) return { entries: [], source: 'none' };
-    return { entries: data.map(toEntry), source: 'remote' };
+    const me = session && session.user ? session.user.id : null;
+    return {
+      entries: data.map((row) => ({ ...toEntry(row), isMe: !!me && row.player_id === me })),
+      source: 'remote',
+    };
   },
 
   async rankForDate(dateKey, score) {

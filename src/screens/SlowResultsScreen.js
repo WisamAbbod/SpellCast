@@ -4,6 +4,9 @@ import Screen from '../components/Screen.js';
 import Button from '../components/Button.js';
 import Confetti from '../components/Confetti.js';
 import EarnedCard from '../components/EarnedCard.js';
+import Mascot from '../components/Mascot.js';
+import BotAvatar from '../components/BotAvatar.js';
+import { characterFor } from '../game/slow/characters.js';
 import { Card } from '../components/Stat.js';
 import { useSettings } from '../hooks/useSettings.js';
 import { GENERATOR_VERSION } from '../config.js';
@@ -12,6 +15,7 @@ import { fonts } from '../theme/typography.js';
 import { radius, space } from '../theme/layout.js';
 import { standings, winnerOf } from '../game/slow/game.js';
 import { POINTS_PER_LEFTOVER_GEM, SLOW_ROUNDS } from '../game/slow/rules.js';
+import { ONLINE_DAILY_CAP, SLOW_DAILY_CAP, STARDUST_GLYPH } from '../game/economy.js';
 
 const plural = (count, noun) => `${noun}${count === 1 ? '' : 's'}`;
 
@@ -40,7 +44,9 @@ const breakdownOf = (entry) =>
 const rowLabel = (entry) =>
   [
     `Rank ${entry.rank}`,
-    entry.isBot ? `${entry.name}, bot` : entry.name,
+    entry.isBot
+      ? `${entry.name}, ${characterFor(entry) ? `${characterFor(entry).title}, ` : ''}bot`
+      : entry.name,
     `${entry.total} ${plural(entry.total, 'point')}`,
     breakdownOf(entry),
     entry.best
@@ -55,7 +61,7 @@ const rowLabel = (entry) =>
  * its own opinion about who won, or a tie would be broken twice and
  * differently.
  */
-const SlowResultsScreen = ({ nav, state, config, earned }) => {
+const SlowResultsScreen = ({ nav, state, config, earned, online }) => {
   const settings = useSettings();
 
   // A game handed over half-built - or not at all - should not take the app down.
@@ -78,6 +84,15 @@ const SlowResultsScreen = ({ nav, state, config, earned }) => {
   const leaders = table.filter((entry) => entry.total === winner.total);
   const rounds = state.rounds || SLOW_ROUNDS;
 
+  // Ecstatic if "you" are in the winning block. Online that is your seat; on one
+  // shared phone it is any human, since the phone belongs to all of them.
+  // A plain object rather than useMemo: this screen returns early above, so it
+  // cannot call hooks here, and a constant key is enough to play it only once.
+  const youWon = online
+    ? leaders.some((entry) => entry.id === online.uid)
+    : leaders.some((entry) => !entry.isBot);
+  const verdict = { mood: youWon ? 'ecstatic' : 'happy', key: 1 };
+
   const playAgain = () => {
     // No config means no roster to rebuild, so send them back to pick one.
     if (!config) return nav.replace('slowSetup');
@@ -87,7 +102,8 @@ const SlowResultsScreen = ({ nav, state, config, earned }) => {
   return (
     <Screen padded stars={settings.reducedMotion ? 0 : 24}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Text style={styles.eyebrow}>{`SLOW MODE · ${rounds} ${plural(rounds, 'ROUND').toUpperCase()}`}</Text>
+        <Mascot size={112} reaction={verdict} roam={1.6} style={styles.mascot} />
+        <Text style={styles.eyebrow}>{`${online ? 'ONLINE' : 'OFFLINE'} · ${rounds} ${plural(rounds, 'ROUND').toUpperCase()}`}</Text>
         <Text style={styles.score}>{winner.total.toLocaleString()}</Text>
 
         {winner.tied ? (
@@ -108,7 +124,11 @@ const SlowResultsScreen = ({ nav, state, config, earned }) => {
         <EarnedCard
           earned={earned}
           style={styles.card}
-          emptyNote="Slow mode tops out at 30 ✦ a day. Come back tomorrow."
+          emptyNote={
+            earned && earned.bucket === 'online'
+              ? `Online games top out at ${ONLINE_DAILY_CAP} ${STARDUST_GLYPH} a day. Come back tomorrow.`
+              : `Offline games top out at ${SLOW_DAILY_CAP} ${STARDUST_GLYPH} a day. Come back tomorrow.`
+          }
         />
 
         <Card title="Final standings" style={styles.card}>
@@ -131,7 +151,7 @@ const SlowResultsScreen = ({ nav, state, config, earned }) => {
                       <Text style={styles.name} numberOfLines={1}>
                         {entry.name}
                       </Text>
-                      {entry.isBot && <Text style={styles.bot}>BOT</Text>}
+                      {entry.isBot && <BotAvatar player={entry} size={18} />}
                     </View>
 
                     <Text style={styles.breakdown} numberOfLines={1}>
@@ -204,6 +224,7 @@ const SlowResultsScreen = ({ nav, state, config, earned }) => {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: space.xl, gap: space.sm },
+  mascot: { marginTop: space.md },
   eyebrow: {
     fontFamily: fonts.body, fontSize: 11, letterSpacing: 3,
     color: colors.textFaint, textAlign: 'center', marginTop: space.md,
@@ -238,11 +259,6 @@ const styles = StyleSheet.create({
   body: { flex: 1, gap: 3 },
   nameLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   name: { flexShrink: 1, fontFamily: fonts.bodySemi, fontSize: 14, color: colors.text },
-  bot: {
-    fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1, color: colors.accent,
-    borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm,
-    paddingHorizontal: 5, paddingVertical: 1,
-  },
   breakdown: { fontFamily: fonts.body, fontSize: 12, color: colors.textDim },
   meta: { fontFamily: fonts.body, fontSize: 11, color: colors.textFaint },
   metaBest: { fontFamily: fonts.bodySemi, color: colors.accent, letterSpacing: 0.8 },

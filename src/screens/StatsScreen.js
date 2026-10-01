@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Screen from '../components/Screen.js';
 import Button from '../components/Button.js';
 import { Card, Stat, StatRow } from '../components/Stat.js';
@@ -8,6 +8,8 @@ import { fonts } from '../theme/typography.js';
 import { radius, space } from '../theme/layout.js';
 import { puzzleNumber, utcDateKey } from '../game/daily.js';
 import { flushLeaderboardQueue, getLeaderboard, isRemoteEnabled } from '../leaderboard/index.js';
+import { LEADERBOARD_PAGE, revealMore } from '../leaderboard/types.js';
+import { tapFeedback } from '../audio/audio.js';
 import { loadProfile } from '../storage/profile.js';
 import { listDailyRecords } from '../storage/dailyResults.js';
 import { averageDailyScore, averageParPercent, longestWordFound } from '../storage/stats.js';
@@ -36,11 +38,31 @@ const Sparkline = ({ records }) => {
   );
 };
 
+// First, second and third, in the same metals as the daily medals.
+const PODIUM = [colors.medal.gold, colors.medal.silver, colors.medal.bronze];
+
+const BoardRow = ({ entry, rank }) => {
+  // By rank, not by position on screen: a row pinned under the list keeps its
+  // real rank, and with it its real colour.
+  const metal = PODIUM[rank - 1];
+  const tint = metal ? { color: metal } : null;
+  return (
+    <View style={[styles.row, entry.isMe && styles.rowMe]}>
+      <Text style={[styles.rowKey, tint]}>{rank}</Text>
+      <Text style={[styles.rowName, tint, metal && styles.rowNamePodium]} numberOfLines={1}>
+        {entry.displayName}
+      </Text>
+      <Text style={[styles.rowScore, tint]}>{entry.score.toLocaleString()}</Text>
+    </View>
+  );
+};
+
 const StatsScreen = ({ nav, dateKey }) => {
   const today = dateKey || utcDateKey();
   const [profile, setProfile] = useState(null);
   const [history, setHistory] = useState([]);
   const [board, setBoard] = useState(null);
+  const [shown, setShown] = useState(LEADERBOARD_PAGE);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -73,6 +95,8 @@ const StatsScreen = ({ nav, dateKey }) => {
   }
 
   const streak = displayedStreak(profile.streak, utcDateKey());
+  const entries = board ? board.entries : [];
+  const myIndex = entries.findIndex((entry) => entry.isMe);
 
   return (
     <Screen>
@@ -102,6 +126,49 @@ const StatsScreen = ({ nav, dateKey }) => {
           </Text>
         </Card>
 
+        <Card title={`Puzzle #${puzzleNumber(today)} leaderboard`} style={styles.card}>
+          {entries.length > 0 ? (
+            <>
+              {entries.slice(0, shown).map((entry, index) => (
+                <BoardRow key={`${entry.playerId}-${entry.date}`} entry={entry} rank={index + 1} />
+              ))}
+              {/* Further down than the list reaches: pinned underneath, so
+                  nobody has to dig for their own name. */}
+              {myIndex >= shown && (
+                <>
+                  <Text style={styles.gap}>⋯</Text>
+                  <BoardRow entry={entries[myIndex]} rank={myIndex + 1} />
+                </>
+              )}
+              {entries.length > shown && (
+                <Pressable
+                  onPress={() => {
+                    tapFeedback();
+                    setShown((current) => revealMore(current, entries.length));
+                  }}
+                  style={styles.more}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Show more players. Showing ${shown} of ${entries.length}.`}
+                >
+                  <Text style={styles.moreLabel}>More</Text>
+                </Pressable>
+              )}
+            </>
+          ) : (
+            <Text style={styles.empty}>
+              {isRemoteEnabled()
+                ? 'No scores posted for this puzzle yet.'
+                : 'Playing offline — this shows your own result. Add Supabase keys in .env for a global board.'}
+            </Text>
+          )}
+          {isRemoteEnabled() && (
+            <Text style={styles.footnote}>
+              Scores are submitted by players, so treat this as a friendly board.
+            </Text>
+          )}
+        </Card>
+
         {history.length > 1 && (
           <Card title="Recent rounds" style={styles.card}>
             <Sparkline records={[...history].reverse()} />
@@ -123,34 +190,6 @@ const StatsScreen = ({ nav, dateKey }) => {
             </View>
           </Card>
         )}
-
-        <Card title={`Puzzle #${puzzleNumber(today)} leaderboard`} style={styles.card}>
-          {board && board.entries.length > 0 ? (
-            board.entries.map((entry, index) => (
-              <View
-                key={`${entry.playerId}-${entry.date}`}
-                style={[styles.row, entry.isMe && styles.rowMe]}
-              >
-                <Text style={styles.rowKey}>{index + 1}</Text>
-                <Text style={styles.rowName} numberOfLines={1}>
-                  {entry.displayName}
-                </Text>
-                <Text style={styles.rowScore}>{entry.score.toLocaleString()}</Text>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.empty}>
-              {isRemoteEnabled()
-                ? 'No scores posted for this puzzle yet.'
-                : 'Playing offline — this shows your own result. Add Supabase keys in .env for a global board.'}
-            </Text>
-          )}
-          {isRemoteEnabled() && (
-            <Text style={styles.footnote}>
-              Scores are submitted by players, so treat this as a friendly board.
-            </Text>
-          )}
-        </Card>
       </ScrollView>
 
       <Button label="Back" variant="ghost" onPress={() => nav.pop()} />
@@ -192,6 +231,7 @@ const styles = StyleSheet.create({
     color: colors.textFaint, minWidth: 38,
   },
   rowName: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.textDim },
+  rowNamePodium: { fontFamily: fonts.bodySemi },
   rowScore: {
     flex: 1, textAlign: 'right', fontFamily: fonts.bodySemi,
     fontSize: 14, color: colors.text,
@@ -201,6 +241,21 @@ const styles = StyleSheet.create({
     fontFamily: fonts.body, fontSize: 12, color: colors.textFaint,
     textAlign: 'center', lineHeight: 18,
   },
+  gap: {
+    fontFamily: fonts.body, fontSize: 12, color: colors.textFaint,
+    textAlign: 'center', lineHeight: 14,
+  },
+  more: {
+    alignSelf: 'center',
+    marginTop: space.sm,
+    paddingVertical: 5,
+    paddingHorizontal: space.md,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  moreLabel: { fontFamily: fonts.bodySemi, fontSize: 11, color: colors.textFaint, letterSpacing: 0.6 },
   footnote: {
     fontFamily: fonts.body, fontSize: 10, color: colors.textFaint,
     textAlign: 'center', marginTop: space.sm,

@@ -7,23 +7,29 @@ import { colors } from '../theme/colors.js';
 import { radius } from '../theme/layout.js';
 
 /**
- * Silence everything, from wherever you are.
+ * Background music on or off, from wherever you are.
  *
- * Settings still has separate music and effects controls; this is the blunt one
- * for when the phone needs to be quiet now. It sets a single `muted` flag that
- * the audio layer checks first, so unmuting restores exactly the mix the player
- * had rather than switching both channels back on.
+ * Music only. Sound effects - finding a word, the countdown - are feedback, not
+ * decoration, and switching the soundtrack off should never take them with it.
+ * Silencing everything is still there, as "Mute everything" in Settings.
  *
- * The glyph is drawn rather than an emoji: emoji speakers render at wildly
- * different sizes and colours across platforms, and this one has to sit next to
- * the pause button without looking like a different app.
+ * This button used to set that blunt `muted` flag, and the app remembers it, so
+ * someone who once tapped it could be left with no music and no effects. So
+ * while it reads as off, a tap clears `muted` as well as turning music on: one
+ * tap gets everything back, and from then on it only ever touches music.
+ *
+ * The glyph is drawn rather than an emoji: emoji render at wildly different
+ * sizes and colours across platforms, and this one sits beside the pause button.
  */
-const MuteButton = ({ size = 44, style }) => {
-  const { muted } = useSettings();
+const MusicButton = ({ size = 44, style }) => {
+  const { music, muted } = useSettings();
+  const on = music && !muted;
 
   const toggle = () => {
     tapFeedback();
-    saveSettings({ muted: !muted });
+    // The audio layer is subscribed to settings, so it starts or stops the
+    // loop as soon as this is saved.
+    saveSettings(on ? { music: false } : { music: true, muted: false });
   };
 
   const barHeights = [0.34, 0.58, 0.82, 0.5];
@@ -39,8 +45,8 @@ const MuteButton = ({ size = 44, style }) => {
         style,
       ]}
       accessibilityRole="switch"
-      accessibilityState={{ checked: muted }}
-      accessibilityLabel={muted ? 'Sound is off. Turn sound on.' : 'Sound is on. Turn sound off.'}
+      accessibilityState={{ checked: on }}
+      accessibilityLabel={on ? 'Music is on. Turn music off.' : 'Music is off. Turn music on.'}
     >
       <View style={styles.bars}>
         {barHeights.map((height, index) => (
@@ -50,17 +56,17 @@ const MuteButton = ({ size = 44, style }) => {
               styles.bar,
               {
                 height: Math.round(size * 0.44 * height),
-                backgroundColor: muted ? colors.textFaint : colors.text,
-                // The tallest bar carries the level, so a muted meter still
+                backgroundColor: on ? colors.text : colors.textFaint,
+                // The tallest bar carries the level, so an off meter still
                 // reads as a meter rather than as four identical dashes.
-                opacity: muted ? 0.5 : 1 - index * 0.08,
+                opacity: on ? 1 - index * 0.08 : 0.5,
               },
             ]}
           />
         ))}
       </View>
 
-      {muted && <View style={[styles.slash, { width: size * 0.62 }]} />}
+      {!on && <View style={[styles.slash, { width: size * 0.62 }]} />}
     </Pressable>
   );
 };
@@ -85,4 +91,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MuteButton;
+export default MusicButton;

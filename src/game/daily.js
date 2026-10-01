@@ -32,6 +32,10 @@ export const isFutureDate = (dateKey, now = Date.now()) => dateKey > utcDateKey(
 
 /* --------------------------------------------------------------- seeds -- */
 
+// The 'spellcast' token is frozen, whatever the app is called. It is an input
+// to the board generator, so changing it would deal every player a different
+// board from tomorrow and make every score on the leaderboard incomparable
+// with every score already on it.
 export const dailySeed = (dateKey) => `spellcast:${GENERATOR_VERSION}:daily:${dateKey}`;
 
 /** A separate channel, so changing the board never moves the bonus tiles. */
