@@ -153,10 +153,11 @@ at all. Nothing caught it, because every individual number looked sensible on
 its own. `tests/economy.test.js` now models actual players, and makes two
 promises since the premium suits arrived, because one number could no longer
 hold both. The everyday shop (5,110 ✦: backgrounds, soundtracks and the
-ordinary costumes) must clear in 14–90 days of dailies alone; and the whole
-shop, suits included (7,460 ✦), in 21–60 days for someone who also plays a
-practice session and an offline game each day. A premium suit must cost at
-least two weeks of dailies, or it is not a goal.
+ordinary costumes) must clear in 14–90 days of dailies alone. The premium
+promise is per suit rather than for the rack — nobody needs all of them, and
+a bound on the total would make every new suit push the others further away:
+each must cost at least two weeks of dailies, or it is not a goal, and no more
+than a month of them, or it is not a reachable one.
 
 The rules live in [`src/game/economy.js`](src/game/economy.js), which imports
 nothing, so the rates are tested under plain node. Caps are passed **in** as a
@@ -210,7 +211,7 @@ tests/            one suite per module
 
 ```bash
 npm start                  # Expo dev server
-npm test                   # 582 checks, 15 suites, no framework, no dev deps
+npm test                   # 583 checks, 15 suites, no framework, no dev deps
 npm run check              # verifies every local import resolves
 npm run sim:slow           # play a whole slow-mode game out in the terminal
 npm run build:dictionary   # re-download and rebuild both word tiers
@@ -271,7 +272,8 @@ the leaderboard screen shows your own history.
 The board is fetched as one request for the top hundred and shown twenty at a
 time, with a small **More** button, so it never scrolls on forever and "More"
 costs no further requests. If you placed below what is showing, your own row is
-pinned under the list with its real rank.
+pinned under the list with its real rank. First, second and third are drawn in
+gold, silver and bronze.
 
 <details>
 <summary><b>Setting up Supabase (free, ~5 minutes)</b></summary>
@@ -364,9 +366,12 @@ can do beyond that:
 - **cover something inside a part.** `over` pieces are drawn above a part's
   children — the pirate's eyepatch has to sit over an eye that lives inside
   the visor, and is clipped by the visor's window like a sticker.
-- **recolour the suit.** The two premium suits carry a `palette`, a
-  role-for-role swap over the rig's own colours (gold; and the Mk II's graphite
-  with cyan edges and a cyan thruster flame). The swap is by colour value, so
+- **recolour the suit.** The three premium suits carry a `palette`, a
+  role-for-role swap over the rig's own colours (gold; the deep sea diver's
+  canvas, with a thruster that blows bubbles; and the Mk II's graphite with
+  cyan edges and a cyan flame). The diver also draws a whole copper helmet
+  over the rig's own, because the rig's helmet takes the suit colour, and
+  pins a fish to the root part so it follows him through every move. The swap is by colour value, so
   every rig colour role needs its own hex — a test holds that — and a costume's
   own pieces are never swapped.
 
