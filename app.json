@@ -12,7 +12,8 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#080711"
+        "backgroundImage": "./assets/adaptive-background.png",
+        "backgroundColor": "#1D1250"
       },
       "permissions": [
         "android.permission.VIBRATE"

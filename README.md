@@ -216,7 +216,15 @@ npm run check              # verifies every local import resolves
 npm run sim:slow           # play a whole slow-mode game out in the terminal
 npm run build:dictionary   # re-download and rebuild both word tiers
 npm run build:audio        # re-synthesise the sound effects from scratch
+node tools/generate_icon.js build   # redraw the app icon, splash and favicon
 ```
+
+The app icon is drawn by [`tools/generate_icon.js`](tools/generate_icon.js) from
+the same rig data as the in-game astronaut, so the two cannot drift apart. It
+writes the full-bleed icon, Android's adaptive foreground and background, the
+splash image and the favicon into `assets/`. `sheet` instead of `build` renders
+the three variants side by side (`helmet`, `tile`, `trail`); `tile` is the one
+shipped. It needs Chrome installed, and nothing else.
 
 `npm test` covers RNG determinism, solver correctness, same-seed-same-board,
 a 200-board quality sweep, UTC date boundaries and leap years, every streak
