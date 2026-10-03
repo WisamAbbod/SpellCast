@@ -104,10 +104,11 @@ const InstructionsScreen = ({ nav }) => (
           letter’s value — offline mode prices them 1 to 8, and most letters cost
           something different here to what they cost on the daily board.
         </Rule>
-        <Rule icon="2x" title="Tiles move every turn">
-          Double letter, triple letter and a 2x word tile are re-dealt after
-          every word, and the letters you used are replaced — so the board the
-          next player sees is never the one you played on.
+        <Rule icon="2x" title="The board keeps changing">
+          The letters you used are replaced and the double and triple letter
+          tiles move after every word, so the next player never sees the board
+          you played on. The 2x word tile stays put for the whole round — every
+          player gets a go at it — and moves when the next round starts.
         </Rule>
         <Rule icon="◇" title="Gems buy abilities">
           Everyone starts with {STARTING_GEMS}. Cover a gem tile with your word

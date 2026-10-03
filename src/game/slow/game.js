@@ -14,6 +14,8 @@ import {
 import {
   analyseSlowBoard,
   createSlowBoard,
+  doubleWordCell,
+  moveDoubleWord,
   refillBoard,
   shuffleBoardLetters,
   swapBoardLetter,
@@ -126,7 +128,17 @@ const replacePlayer = (state, index, changes) => ({
 const advance = (state) => {
   const turnIndex = state.turnIndex + 1;
   const status = turnIndex >= totalTurns(state) ? 'finished' : state.status;
-  return { ...state, turnIndex, extensions: 0, status };
+  const next = { ...state, turnIndex, extensions: 0, status };
+  // A new round moves the 2x word tile - whether the last turn of the old one
+  // was a word (whose refill has already put it there) or a pass.
+  if (status === 'playing' && turnIndex % state.players.length === 0) {
+    const doubleAt = doubleWordCell(state.seed, currentRound(next));
+    const modifiers = moveDoubleWord(state.board.modifiers, doubleAt);
+    if (modifiers !== state.board.modifiers) {
+      next.board = { ...state.board, modifiers, version: state.board.version + 1 };
+    }
+  }
+  return next;
 };
 
 const fail = (reason) => ({ ok: false, reason });
@@ -219,7 +231,9 @@ export const submitWord = (state, indices) => {
 
   next = {
     ...next,
-    board: refillBoard(next.board, indices, state.seed, state.turnIndex),
+    // The 2x tile for whichever round the next turn belongs to.
+    board: refillBoard(next.board, indices, state.seed, state.turnIndex,
+      doubleWordCell(state.seed, currentRound({ ...state, turnIndex: state.turnIndex + 1 }))),
     usedWords: [...next.usedWords, word],
     history: [...next.history, event],
     lastEvent: event,

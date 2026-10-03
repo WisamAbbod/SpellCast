@@ -116,7 +116,9 @@ ok(
 );
 ok('a refill clears the gems that were collected', used.every((index) => refilled.gems[index] === false));
 check('a refill bumps the version', refilled.version, board0.version + 1);
-check('a refill re-rolls the bonus tiles', new Set(refilled.modifiers.filter(Boolean)).size, 3);
+check('a refill keeps all three bonus tiles', new Set(refilled.modifiers.filter(Boolean)).size, 3);
+check('...and, mid-round, leaves the 2x word tile where it was',
+  refilled.modifiers.indexOf('DW'), board0.modifiers.indexOf('DW'));
 ok(
   `a refill leaves a playable board (${boardApi.analyseSlowBoard(refilled.letters).count} words)`,
   boardApi.analyseSlowBoard(refilled.letters).count >= 20,
@@ -487,3 +489,36 @@ check(
   }),
   null,
 );
+
+
+/* ---- the 2x word tile moves once a ROUND, not once a turn ---------------------- */
+{
+  const dwAt = (state) => state.board.modifiers.indexOf('DW');
+  let state = game.createSlowGame({ seed: 'dw-rounds', players: [{ name: 'A' }, { name: 'B' }, { name: 'C' }] });
+  const players = state.players.length;
+  const byRound = {};
+  let steadyWithinRound = true;
+  let letterTilesMoved = false;
+  while (state.status === 'playing') {
+    const round = game.currentRound(state);
+    if (byRound[round] === undefined) byRound[round] = dwAt(state);
+    else if (byRound[round] !== dwAt(state)) steadyWithinRound = false;
+    const before = state.board.modifiers.indexOf('DL');
+    // Alternate words and passes, so rounds end on both.
+    const move = state.turnIndex % 2 === 0 ? bot.chooseBotWord(state) : null;
+    const played = move ? game.submitWord(state, move.indices) : null;
+    state = played && played.ok ? played.state : game.passTurn(state, 'test').state;
+    if (state.board.modifiers.indexOf('DL') !== before) letterTilesMoved = true;
+  }
+  const rounds = Object.keys(byRound).map(Number).sort((a, b) => a - b);
+  check(`all ${state.rounds} rounds were played by ${players} players`, rounds.length, state.rounds);
+  ok('the 2x word tile holds its square for every turn of a round', steadyWithinRound);
+  ok('...and moves to a new square every new round',
+    rounds.every((r, i) => i === 0 || byRound[r] !== byRound[rounds[i - 1]]), JSON.stringify(byRound));
+  ok('...including a round that started after a pass', rounds.every((r) => byRound[r] === boardApi.doubleWordCell('dw-rounds', r)));
+  ok('the letter bonuses still move after a word', letterTilesMoved);
+
+  const mods = ['DL', null, 'DW', null, 'TL'];
+  check('moving the 2x tile onto a letter bonus swaps them, so no tile is lost',
+    boardApi.moveDoubleWord(mods, 0).join(), ['DW', null, 'DL', null, 'TL'].join());
+}

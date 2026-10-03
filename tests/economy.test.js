@@ -447,3 +447,21 @@ ok('the continuously-moving motions are not the densest',
   check('a player from before this existed has been given none',
     withDefaults({ wallet: { balance: 7, lifetime: 7, spent: 0 } }, DEFAULT_PROFILE).devGrant, 0);
 }
+
+/* ---- ...and it can never reach a store build ----------------------------------- */
+{
+  // The guarantee is in how boot.js reads the number, so this reads boot.js.
+  // If someone drops the __DEV__ lock, or reads the amount from anywhere but
+  // the environment, this fails before a build is ever made.
+  const boot = fs.readFileSync(path.join(__dirname, '..', 'src/session/boot.js'), 'utf8');
+  const decl = (boot.match(/const DEV_STARDUST =([\s\S]*?);/) || [])[1] || '';
+  ok('the top-up amount is only read when __DEV__ is true',
+    /__DEV__\s*\?\s*Number\(process\.env\.EXPO_PUBLIC_DEV_STARDUST\)/.test(decl) && /:\s*0\s*$/.test(decl.trim()), decl.trim());
+  ok('...and nothing else in the app pays a top-up', (boot.match(/devGrant\(/g) || []).length === 1);
+  // Cloud builds take their settings from eas.json and EAS's own variables,
+  // never from .env - so the amount must not be written into eas.json either.
+  const eas = fs.readFileSync(path.join(__dirname, '..', 'eas.json'), 'utf8');
+  ok('no build profile in eas.json sets a top-up', !/DEV_STARDUST/.test(eas));
+  const ignored = fs.readFileSync(path.join(__dirname, '..', '.gitignore'), 'utf8').split(String.fromCharCode(10)).map((l) => l.trim());
+  ok('.env stays out of git, and so out of every cloud build', ignored.includes('.env'));
+}

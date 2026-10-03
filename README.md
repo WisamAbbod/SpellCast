@@ -48,16 +48,19 @@ scored nothing like the daily mode.
 | What scores | word length dominates | letter values dominate |
 | Long words | ×3 and +100 at seven letters | flat +10 at six |
 | Letter values | 1 / 2 / 5 / 8 / 10 | 1 to 8, Scrabble-ish |
-| Bonus tiles | fixed for the round | re-dealt every turn |
+| Bonus tiles | fixed for the round | letter bonuses move every turn, 2× word every round |
 | The board | fixed for the round | used letters are replaced |
 | Economy | none | gems buy abilities |
 
 Letters carry the value here — Q and Z are worth 8, J and X 7, A/E/I/O just 1 —
 so a short expensive word can beat a long cheap one. Each tile prints its own
 value in the corner, so that is something you can read off the board rather than
-having to remember. Double-letter, triple-letter and
-2× word tiles move after every turn, and the letters a word consumed are
-replaced, so no two players ever face the same board.
+having to remember. Double- and triple-letter tiles move after every word, and
+the letters a word consumed are replaced, so no two players ever face the same
+board. The 2× word tile holds its square for a whole round, so everyone gets a
+turn at it, then moves when the next round starts (never to the square it just
+left). Its square is a pure function of the seed and the round, so every
+device in an online game agrees without being told.
 
 Everyone starts with **three gems**, as Discord's SpellCast did before it was
 shut down in late 2025. More sit on

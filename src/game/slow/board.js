@@ -7,14 +7,17 @@ import {
   BONUS_TILE_PLAN,
   GEM_TILES_MAX,
   GEM_TILES_MIN,
+  TILE_DOUBLE_WORD,
 } from './rules.js';
 
 /**
  * The shared board, and how it changes hands.
  *
  * Unlike the daily board - fixed for sixty seconds - this one mutates after
- * every word: the letters that were used are replaced, the bonus tiles move,
- * and gems respawn. That is what keeps five rounds interesting rather than five
+ * every word: the letters that were used are replaced, the letter bonuses
+ * move, and gems respawn. The 2x word tile is slower: it holds its square for
+ * a whole round, so everyone gets a turn at the same board feature, and moves
+ * when the next round starts. That is what keeps five rounds interesting rather than five
  * players racing to spot the same word.
  *
  * Everything is seeded, so a whole game replays identically from its seed. That
@@ -47,22 +50,58 @@ export const analyseSlowBoard = (letters) => {
 
 /* --------------------------------------------------------------- tiles -- */
 
-/** Distinct cells for each bonus tile, re-rolled every turn. */
-export const placeBonusTiles = (rng) => {
+/**
+ * Where the 2x word tile sits for a round (round 1 is the first). A pure
+ * function of the seed, so every client and every replay agrees without being
+ * told, and it never lands on the square it just left - a move nobody can see
+ * is not a move.
+ */
+export const doubleWordCell = (seed, round) => {
+  let cell = -1;
+  for (let r = 1; r <= Math.max(1, round); r++) {
+    const rng = makeRng(slowSeed(seed, 'double', r));
+    const pick = rngInt(rng, cell < 0 ? CELL_COUNT : CELL_COUNT - 1);
+    cell = cell >= 0 && pick >= cell ? pick + 1 : pick;
+  }
+  return cell;
+};
+
+/**
+ * Distinct cells for each bonus tile: the 2x word tile where the round says,
+ * the letter bonuses re-rolled around it.
+ */
+export const placeBonusTiles = (rng, doubleAt) => {
   const modifiers = new Array(CELL_COUNT).fill(null);
+  modifiers[doubleAt] = TILE_DOUBLE_WORD;
   const cells = rngShuffle(
     rng,
-    Array.from({ length: CELL_COUNT }, (_, index) => index),
+    Array.from({ length: CELL_COUNT }, (_, index) => index).filter((index) => index !== doubleAt),
   );
 
   let cursor = 0;
   BONUS_TILE_PLAN.forEach((entry) => {
+    if (entry.type === TILE_DOUBLE_WORD) return;
     for (let i = 0; i < entry.count && cursor < cells.length; i++) {
       modifiers[cells[cursor++]] = entry.type;
     }
   });
 
   return modifiers;
+};
+
+/**
+ * Moves only the 2x word tile, for a round that began on a pass rather than a
+ * word. A letter bonus already on the new square trades places with it, so the
+ * board never loses a tile.
+ */
+export const moveDoubleWord = (modifiers, doubleAt) => {
+  const from = modifiers.indexOf(TILE_DOUBLE_WORD);
+  if (from === doubleAt) return modifiers;
+  const next = modifiers.slice();
+  const displaced = next[doubleAt];
+  if (from >= 0) next[from] = displaced || null;
+  next[doubleAt] = TILE_DOUBLE_WORD;
+  return next;
 };
 
 /**
@@ -108,21 +147,28 @@ export const createSlowBoard = (seed) => {
 
   return withMeta(
     generated.board.slice(),
-    placeBonusTiles(rng),
+    placeBonusTiles(rng, doubleWordCell(seed, 1)),
     replenishGems(new Array(CELL_COUNT).fill(false), rng),
     0,
   );
 };
 
 /**
- * Replaces the letters a word consumed, moves the bonus tiles, and respawns
- * gems.
+ * Replaces the letters a word consumed, moves the letter bonuses, and respawns
+ * gems. `doubleAt` is where the 2x word tile must be for the NEXT turn - the
+ * same square until a new round starts.
  *
  * The refill is checked with the solver and redrawn if it left the board too
  * thin. It can't fail outright - after the attempts run out the last draw is
  * used, which is still a legal board, just a less generous one.
  */
-export const refillBoard = (state, usedIndices, seed, turnIndex) => {
+export const refillBoard = (
+  state,
+  usedIndices,
+  seed,
+  turnIndex,
+  doubleAt = state.modifiers.indexOf(TILE_DOUBLE_WORD), // by default, it stays put
+) => {
   const used = new Set(usedIndices);
   let letters = state.letters;
 
@@ -144,7 +190,7 @@ export const refillBoard = (state, usedIndices, seed, turnIndex) => {
     gems[index] = false; // collected by whoever played the word
   });
 
-  return withMeta(letters, placeBonusTiles(rng), replenishGems(gems, rng), state.version + 1);
+  return withMeta(letters, placeBonusTiles(rng, doubleAt), replenishGems(gems, rng), state.version + 1);
 };
 
 /**
