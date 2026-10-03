@@ -5,6 +5,9 @@ import Button from '../components/Button.js';
 import { Card } from '../components/Stat.js';
 import Sheet from '../components/Sheet.js';
 import BotAvatar from '../components/BotAvatar.js';
+import PlayerSheet from '../components/PlayerSheet.js';
+import { useSettings } from '../hooks/useSettings.js';
+import { hiddenIds } from '../storage/schema.js';
 import { subscribeToRoom } from '../online/channel.js';
 import {
   fetchRoom, leaveRoom, rosterToPlayers, setBots, startRoom, MAX_ROOM_PLAYERS, MIN_ROOM_PLAYERS,
@@ -35,11 +38,13 @@ const SlowLobbyScreen = ({ nav, room: initialRoom, uid }) => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [picking, setPicking] = useState(false);
+  const [about, setAbout] = useState(null); // the player whose name was tapped
+  const settings = useSettings(); // so hiding someone renames their seat at once
   const launched = useRef(false);
 
   const roomId = initialRoom.id;
   const isHost = room.hostId === uid;
-  const players = rosterToPlayers(room.roster);
+  const players = rosterToPlayers(room.roster, hiddenIds(settings));
   const seatsLeft = MAX_ROOM_PLAYERS - players.length;
 
   useEffect(() => {
@@ -201,10 +206,22 @@ const SlowLobbyScreen = ({ nav, room: initialRoom, uid }) => {
             <View key={player.id} style={styles.seat}>
               <View style={[styles.dot, here && styles.dotHere]} />
               {player.isBot && <BotAvatar player={player} size={20} />}
-              <Text style={styles.seatName} numberOfLines={1}>
-                {player.name}
-                {player.uid === uid ? ' (you)' : ''}
-              </Text>
+              {/* Another person's name can be reported or hidden from here. */}
+              {!player.isBot && player.uid && player.uid !== uid ? (
+                <Pressable
+                  onPress={() => setAbout({ id: player.uid, name: player.name })}
+                  style={styles.seatNameTap}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${player.name}. Report or hide this player.`}
+                >
+                  <Text style={styles.seatName} numberOfLines={1}>{player.name}</Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.seatName} numberOfLines={1}>
+                  {player.name}
+                  {player.uid === uid ? ' (you)' : ''}
+                </Text>
+              )}
               {room.hostId === player.uid && <Text style={styles.tag}>HOST</Text>}
               {!here && <Text style={styles.away}>away</Text>}
               {player.isBot && isHost ? (
@@ -310,6 +327,7 @@ const SlowLobbyScreen = ({ nav, room: initialRoom, uid }) => {
         })}
         <Button label="Cancel" variant="ghost" onPress={() => setPicking(false)} />
       </Sheet>
+      <PlayerSheet player={about} context="lobby" onClose={() => setAbout(null)} />
     </Screen>
   );
 };
@@ -359,6 +377,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.textFaint, opacity: 0.5,
   },
   dotHere: { backgroundColor: colors.success, opacity: 1 },
+  seatNameTap: { flex: 1 },
   seatName: { flex: 1, fontFamily: fonts.bodySemi, fontSize: 14, color: colors.text },
   tag: {
     fontFamily: fonts.body, fontSize: 9, letterSpacing: 1,

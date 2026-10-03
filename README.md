@@ -214,7 +214,7 @@ tests/            one suite per module
 
 ```bash
 npm start                  # Expo dev server
-npm test                   # 583 checks, 15 suites, no framework, no dev deps
+npm test                   # 607 checks, 15 suites, no framework, no dev deps
 npm run check              # verifies every local import resolves
 npm run sim:slow           # play a whole slow-mode game out in the terminal
 npm run build:dictionary   # re-download and rebuild both word tiers
@@ -455,6 +455,29 @@ already draws; what it does prevent is a stranger writing into your game.
 Bots are played out by the host only. If every client ran them they would each
 pick a different word before racing to write it, so the move that landed would
 not be the one most people watched.
+
+## Names, reports and hiding
+
+Display names are the only thing a player types that other players see, on the
+daily leaderboard and in online games, and App Store guideline 1.2 asks three
+things of that: filter it, let players report it, let players block it.
+
+- **Filter.** [`src/game/names.js`](src/game/names.js) is checked when a name is
+  chosen and again when somebody else's name arrives from the server
+  (`safeName`), because a modified app can send anything. It survives the usual
+  disguises (`f.u.c.k`, `sh1t`) and leaves real names alone (Scunthorpe,
+  Dickens, Peacock); the tests hold both lists.
+- **Report.** Tapping another player's name on the leaderboard, in an online
+  lobby or on online results opens Report / Hide. A report is a row in
+  `player_reports`, which the app can write but nobody can read back through
+  the API. Review them in the Supabase dashboard (Table editor → `player_reports`).
+- **Hide.** Kept on the device in settings. A hidden player leaves the
+  leaderboard (ranks keep their real numbers) and shows as "Hidden player" in
+  online games. Settings brings them back.
+
+The store listing text, the form answers and the screenshots are in
+[`store/`](store/); the privacy policy and support page are in [`docs/`](docs/),
+written to be served by GitHub Pages.
 
 ## ⚠️ Do not change the slug
 

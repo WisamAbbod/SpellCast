@@ -1,6 +1,7 @@
 import { GENERATOR_VERSION } from '../config.js';
 import { LEADERBOARD_LIMIT } from './types.js';
 import { ensureSession, getClient } from './supabaseClient.js';
+import { safeName } from '../game/names.js';
 
 /**
  * The global daily leaderboard.
@@ -39,7 +40,9 @@ const toEntry = (row) => ({
   parPercent: row.par_percent,
   generatorVersion: row.generator_version,
   playerId: row.player_id,
-  displayName: row.display_name || 'Anonymous',
+  // Filtered on the way IN as well as when chosen: a modified app can submit
+  // any name, and this is the check it cannot skip.
+  displayName: safeName(row.display_name, 'Anonymous'),
   createdAt: Date.parse(row.created_at) || 0,
 });
 
@@ -65,7 +68,7 @@ export const supabaseLeaderboard = {
         best_word: entry.bestWord,
         best_word_score: entry.bestWordScore,
         par_percent: entry.parPercent,
-        display_name: (entry.displayName || 'Anonymous').slice(0, 24),
+        display_name: safeName(entry.displayName, 'Anonymous').slice(0, 24),
       },
       { onConflict: 'player_id,date,generator_version' },
     );

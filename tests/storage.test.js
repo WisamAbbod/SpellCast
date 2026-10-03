@@ -137,3 +137,31 @@ module.exports = run;
   while (shown < 100 && presses < 50) { shown = revealMore(shown, 100); presses++; }
   check('four presses take twenty to a hundred', presses, 4);
 }
+
+/* ---- names other players will see ---------------------------------------------- */
+{
+  const { nameIssue, isNameAllowed, safeName } = loadSrc('src/game/names.js');
+  const blocked = ['fuck', 'F.u.c.k', 'sh1t', 'fuuuuck', 'ass', 'a s s', 'Big Ass', 'b!tch', 'cunt99', 'Hitler', 'KYS'];
+  const fine = ['Wisam', 'Cassandra', 'Scunthorpe', 'Dickens', 'Peacock', 'Grape', 'Essex', 'Spice', 'Raccoon',
+    'Night Owl', 'Therapist', 'Torpedo', 'Classic', 'Assassin', 'Cucumber', 'Shiitake', 'Hancock', 'Nova', 'Player 2'];
+  check('obvious and disguised names are refused', blocked.filter(isNameAllowed).join(','), '');
+  check('ordinary names that merely contain a rude word are left alone', fine.filter((n) => !isNameAllowed(n)).join(','), '');
+  check('an empty name is not an offence (it means anonymous)', nameIssue(''), null);
+  ok('a refusal comes with something to show the player', typeof nameIssue('shit') === 'string');
+  check('someone else\'s clean name is shown as it is', safeName('Cassandra', 'Player'), 'Cassandra');
+  check('...and a bad one is replaced, not shown', safeName('sh1thead', 'Player 3'), 'Player 3');
+  check('whatever the server sends, it never throws', [null, undefined, 42, {}, ''].map((v) => safeName(v, 'Anonymous')).join(','),
+    'Anonymous,Anonymous,Anonymous,Anonymous,Anonymous');
+}
+
+/* ---- hidden players -------------------------------------------------------------- */
+{
+  const { DEFAULT_SETTINGS, withDefaults, withHidden, hiddenIds } = loadSrc('src/storage/schema.js');
+  check('nobody is hidden to begin with', hiddenIds(DEFAULT_SETTINGS).size, 0);
+  check('settings from before this existed hide nobody', hiddenIds(withDefaults({ music: false }, DEFAULT_SETTINGS)).size, 0);
+  const one = withHidden([], { id: 'u1', name: 'Rude' });
+  ok('hiding a player remembers them', hiddenIds({ hiddenPlayers: one }).has('u1'));
+  ok('hiding the same player twice changes nothing', withHidden(one, { id: 'u1', name: 'Rude' }) === one);
+  ok('a player with no id cannot be hidden', withHidden(one, { name: 'Ghost' }) === one);
+  check('damaged storage hides nobody rather than crashing', hiddenIds({ hiddenPlayers: 'oops' }).size, 0);
+}

@@ -1,11 +1,12 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Screen from '../components/Screen.js';
 import Button from '../components/Button.js';
 import Confetti from '../components/Confetti.js';
 import EarnedCard from '../components/EarnedCard.js';
 import Mascot from '../components/Mascot.js';
 import BotAvatar from '../components/BotAvatar.js';
+import PlayerSheet from '../components/PlayerSheet.js';
 import { characterFor } from '../game/slow/characters.js';
 import { Card } from '../components/Stat.js';
 import { useSettings } from '../hooks/useSettings.js';
@@ -63,6 +64,7 @@ const rowLabel = (entry) =>
  */
 const SlowResultsScreen = ({ nav, state, config, earned, online }) => {
   const settings = useSettings();
+  const [about, setAbout] = useState(null); // whose name was tapped, online
 
   // A game handed over half-built - or not at all - should not take the app down.
   if (!state || !Array.isArray(state.players) || state.players.length === 0) {
@@ -148,9 +150,21 @@ const SlowResultsScreen = ({ nav, state, config, earned, online }) => {
 
                   <View style={styles.body}>
                     <View style={styles.nameLine}>
-                      <Text style={styles.name} numberOfLines={1}>
-                        {entry.name}
-                      </Text>
+                      {/* Online, another person's name can be reported or hidden. */}
+                      {online && !entry.isBot && entry.id !== online.uid ? (
+                        <Pressable
+                          onPress={() => setAbout({ id: entry.id, name: entry.name })}
+                          hitSlop={6}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${entry.name}. Report or hide this player.`}
+                        >
+                          <Text style={styles.name} numberOfLines={1}>{entry.name}</Text>
+                        </Pressable>
+                      ) : (
+                        <Text style={styles.name} numberOfLines={1}>
+                          {entry.name}
+                        </Text>
+                      )}
                       {entry.isBot && <BotAvatar player={entry} size={18} />}
                     </View>
 
@@ -218,6 +232,7 @@ const SlowResultsScreen = ({ nav, state, config, earned, online }) => {
       </ScrollView>
 
       <Confetti burstKey={1} count={40} enabled={!settings.reducedMotion} />
+      <PlayerSheet player={about} context="results" onClose={() => setAbout(null)} />
     </Screen>
   );
 };

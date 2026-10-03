@@ -56,7 +56,7 @@ const InstructionsScreen = ({ nav }) => (
           moving and it keeps climbing.
         </Rule>
         <Rule icon="⇄" title="Shuffle">
-          Three shuffles per round, on a short cooldown. The new board is still
+          One shuffle per round, so pick your moment. The new board is still
           drawn from the puzzle's own seed, so it stays the same for everyone.
         </Rule>
       </Card>

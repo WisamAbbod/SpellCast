@@ -10,6 +10,9 @@ import { puzzleNumber, utcDateKey } from '../game/daily.js';
 import { flushLeaderboardQueue, getLeaderboard, isRemoteEnabled } from '../leaderboard/index.js';
 import { LEADERBOARD_PAGE, revealMore } from '../leaderboard/types.js';
 import { tapFeedback } from '../audio/audio.js';
+import PlayerSheet from '../components/PlayerSheet.js';
+import { useSettings } from '../hooks/useSettings.js';
+import { hiddenIds } from '../storage/schema.js';
 import { loadProfile } from '../storage/profile.js';
 import { listDailyRecords } from '../storage/dailyResults.js';
 import { averageDailyScore, averageParPercent, longestWordFound } from '../storage/stats.js';
@@ -41,19 +44,27 @@ const Sparkline = ({ records }) => {
 // First, second and third, in the same metals as the daily medals.
 const PODIUM = [colors.medal.gold, colors.medal.silver, colors.medal.bronze];
 
-const BoardRow = ({ entry, rank }) => {
-  // By rank, not by position on screen: a row pinned under the list keeps its
-  // real rank, and with it its real colour.
+const BoardRow = ({ entry, onPress }) => {
+  // By real rank, not position on screen: a row pinned under the list, or one
+  // below a hidden player, keeps its true rank - and with it its real colour.
+  const rank = entry.rank;
   const metal = PODIUM[rank - 1];
   const tint = metal ? { color: metal } : null;
+  // Someone else's row opens Report / Hide; your own row is just your row.
+  const Row = onPress ? Pressable : View;
   return (
-    <View style={[styles.row, entry.isMe && styles.rowMe]}>
+    <Row
+      style={[styles.row, entry.isMe && styles.rowMe]}
+      onPress={onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityLabel={onPress ? `${rank}, ${entry.displayName}, ${entry.score}. Report or hide this player.` : undefined}
+    >
       <Text style={[styles.rowKey, tint]}>{rank}</Text>
       <Text style={[styles.rowName, tint, metal && styles.rowNamePodium]} numberOfLines={1}>
         {entry.displayName}
       </Text>
       <Text style={[styles.rowScore, tint]}>{entry.score.toLocaleString()}</Text>
-    </View>
+    </Row>
   );
 };
 
@@ -64,6 +75,8 @@ const StatsScreen = ({ nav, dateKey }) => {
   const [board, setBoard] = useState(null);
   const [shown, setShown] = useState(LEADERBOARD_PAGE);
   const [loading, setLoading] = useState(true);
+  const [about, setAbout] = useState(null); // whose row was tapped
+  const settings = useSettings(); // hiding someone takes them off the board at once
 
   const load = useCallback(async () => {
     const [loadedProfile, records] = await Promise.all([
@@ -95,7 +108,14 @@ const StatsScreen = ({ nav, dateKey }) => {
   }
 
   const streak = displayedStreak(profile.streak, utcDateKey());
-  const entries = board ? board.entries : [];
+  const hidden = hiddenIds(settings);
+  const entries = (board ? board.entries : [])
+    .map((entry, index) => ({ ...entry, rank: index + 1 }))
+    .filter((entry) => entry.isMe || !hidden.has(entry.playerId));
+  const tapFor = (entry) =>
+    !entry.isMe && isRemoteEnabled() && entry.playerId
+      ? () => setAbout({ id: entry.playerId, name: entry.displayName })
+      : undefined;
   const myIndex = entries.findIndex((entry) => entry.isMe);
 
   return (
@@ -130,14 +150,14 @@ const StatsScreen = ({ nav, dateKey }) => {
           {entries.length > 0 ? (
             <>
               {entries.slice(0, shown).map((entry, index) => (
-                <BoardRow key={`${entry.playerId}-${entry.date}`} entry={entry} rank={index + 1} />
+                <BoardRow key={`${entry.playerId}-${entry.date}`} entry={entry} onPress={tapFor(entry)} />
               ))}
               {/* Further down than the list reaches: pinned underneath, so
                   nobody has to dig for their own name. */}
               {myIndex >= shown && (
                 <>
                   <Text style={styles.gap}>⋯</Text>
-                  <BoardRow entry={entries[myIndex]} rank={myIndex + 1} />
+                  <BoardRow entry={entries[myIndex]} />
                 </>
               )}
               {entries.length > shown && (
@@ -192,6 +212,7 @@ const StatsScreen = ({ nav, dateKey }) => {
         )}
       </ScrollView>
 
+      <PlayerSheet player={about} context="leaderboard" onClose={() => setAbout(null)} />
       <Button label="Back" variant="ghost" onPress={() => nav.pop()} />
     </Screen>
   );

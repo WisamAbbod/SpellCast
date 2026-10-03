@@ -11,6 +11,7 @@ import { fonts } from '../theme/typography.js';
 import { radius, space } from '../theme/layout.js';
 import { resetSettings, saveSettings } from '../storage/settings.js';
 import { NAME_LIMIT, cleanName, cleanVolume } from '../storage/schema.js';
+import { nameIssue } from '../game/names.js';
 import { clearProfileCache, resetProfile } from '../storage/profile.js';
 import { clearDailyHistory } from '../storage/dailyResults.js';
 import { clearQueue } from '../storage/queue.js';
@@ -178,15 +179,40 @@ const SettingsScreen = ({ nav }) => {
           <TextInput
             value={name}
             onChangeText={setName}
-            onEndEditing={() => saveSettings({ displayName: cleanName(name), welcomed: true })}
+            // A name that fails the filter is simply not saved: the old one
+            // stays, and the note below says why.
+            onEndEditing={() => {
+              if (!nameIssue(cleanName(name))) saveSettings({ displayName: cleanName(name), welcomed: true });
+            }}
             placeholder="Anonymous"
             placeholderTextColor={colors.textFaint}
             maxLength={NAME_LIMIT}
             style={styles.input}
             accessibilityLabel="Your name"
           />
-          <Text style={styles.hint}>On the leaderboard and to other players online.</Text>
+          {nameIssue(cleanName(name)) ? (
+            <Text style={[styles.hint, styles.hintBad]}>
+              That name is not allowed, so it has not been saved. Other players will see it - pick another.
+            </Text>
+          ) : (
+            <Text style={styles.hint}>On the leaderboard and to other players online.</Text>
+          )}
         </Card>
+
+        {/* Players hidden from the leaderboard and online games (see PlayerSheet). */}
+        {(settings.hiddenPlayers || []).length > 0 && (
+          <Card title="Hidden players" style={styles.card}>
+            <Text style={styles.hint}>
+              {`${settings.hiddenPlayers.length} hidden: ${settings.hiddenPlayers.map((entry) => entry.name).filter(Boolean).join(', ')}`}
+            </Text>
+            <Button
+              label="Show them again"
+              variant="secondary"
+              onPress={() => saveSettings({ hiddenPlayers: [] })}
+              style={styles.reset}
+            />
+          </Card>
+        )}
 
         <Card title="Data" style={styles.card}>
           <Text style={styles.hint}>
@@ -248,6 +274,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
   },
+  hintBad: { color: colors.danger },
   hint: {
     fontFamily: fonts.body, fontSize: 11, color: colors.textFaint,
     marginTop: space.sm, lineHeight: 17,

@@ -1,5 +1,7 @@
 import { GENERATOR_VERSION } from '../config.js';
 import { ensureSession, getClient } from '../leaderboard/supabaseClient.js';
+import { safeName } from '../game/names.js';
+import { HIDDEN_NAME } from '../storage/schema.js';
 
 /**
  * Rooms: creating one, getting into one, starting it, ending it.
@@ -81,12 +83,23 @@ export const toRoom = (row) => ({
   finishedAt: row.finished_at ? Date.parse(row.finished_at) : null,
 });
 
-/** The seating the engine needs, in the order turns are taken. */
-export const rosterToPlayers = (roster) =>
+/**
+ * The seating the engine needs, in the order turns are taken.
+ *
+ * Other people's names are filtered here, where they arrive - every screen
+ * that shows a seat reads it from this - and anyone this player has hidden
+ * (`hidden`, a Set of uids) is shown as "Hidden player". Bots are named by the
+ * game, so they are left alone.
+ */
+export const rosterToPlayers = (roster, hidden = null) =>
   (roster || []).map((seat, index) => ({
     id: seat.id || seat.uid || `p${index}`,
     uid: seat.uid || null,
-    name: seat.name || `Player ${index + 1}`,
+    name: seat.isBot
+      ? seat.name || `Player ${index + 1}`
+      : hidden && seat.uid && hidden.has(seat.uid)
+        ? HIDDEN_NAME
+        : safeName(seat.name, `Player ${index + 1}`),
     isBot: !!seat.isBot,
     level: seat.level || 'medium',
   }));

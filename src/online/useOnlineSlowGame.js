@@ -4,6 +4,8 @@ import { nextSeq, replaySlowGame } from '../game/slow/replay.js';
 import { subscribeToRoom } from './channel.js';
 import { fetchMoves, submitMove } from './moves.js';
 import { fetchRoom, isMySeat, rosterToPlayers } from './rooms.js';
+import { getSettings } from '../storage/settings.js';
+import { hiddenIds } from '../storage/schema.js';
 
 /**
  * A live slow game, driven by the move log.
@@ -104,7 +106,8 @@ export const useOnlineSlowGame = ({ room: initialRoom, uid }) => {
     };
   }, [roomId, absorb, resync]);
 
-  const players = useMemo(() => rosterToPlayers(room && room.roster), [room]);
+  // Names only: who is hidden changes what is shown, never who sits where.
+  const players = useMemo(() => rosterToPlayers(room && room.roster, hiddenIds(getSettings())), [room]);
 
   const config = useMemo(
     () =>

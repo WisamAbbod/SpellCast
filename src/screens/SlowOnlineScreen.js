@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { nameIssue } from '../game/names.js';
 import Screen from '../components/Screen.js';
 import Button from '../components/Button.js';
 import { Card } from '../components/Stat.js';
@@ -49,6 +50,12 @@ const SlowOnlineScreen = ({ nav }) => {
     const trimmed = name.trim().slice(0, NAME_MAX_LENGTH);
     if (!trimmed) {
       setError('Pick a name first');
+      return;
+    }
+    // Everyone at the table sees it, so it goes through the same filter as
+    // the leaderboard name.
+    if (nameIssue(trimmed)) {
+      setError('That name is not allowed - pick another');
       return;
     }
 

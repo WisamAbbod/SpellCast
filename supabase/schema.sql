@@ -634,6 +634,33 @@ begin
 end;
 $$;
 
+-- --- player reports --------------------------------------------------------
+
+-- A player can report another player's name from the leaderboard or an online
+-- game (App Store guideline 1.2). Reports are write-only from the app: there
+-- is no select policy, so nobody can read them back through the API - they
+-- are reviewed in the Supabase dashboard (Table editor -> player_reports).
+-- One report per reporter per player, so tapping Report twice is not spam.
+create table if not exists public.player_reports (
+  id bigint generated always as identity primary key,
+  reporter uuid not null default auth.uid(),
+  reported uuid not null,
+  reported_name text not null check (char_length(reported_name) <= 40),
+  context text not null check (context in ('leaderboard', 'lobby', 'results')),
+  created_at timestamptz not null default now(),
+  unique (reporter, reported)
+);
+
+alter table public.player_reports enable row level security;
+
+drop policy if exists "players file their own reports" on public.player_reports;
+create policy "players file their own reports"
+  on public.player_reports for insert to authenticated
+  with check (reporter = (select auth.uid()) and reported <> (select auth.uid()));
+
+revoke all on public.player_reports from anon, authenticated;
+grant insert on public.player_reports to authenticated;
+
 -- --- who may call what ----------------------------------------------------
 
 -- The room functions are SECURITY DEFINER, so they bypass row level security

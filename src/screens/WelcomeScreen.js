@@ -5,6 +5,7 @@ import Button from '../components/Button.js';
 import Mascot from '../components/Mascot.js';
 import { saveSettings } from '../storage/settings.js';
 import { NAME_LIMIT, cleanName } from '../storage/schema.js';
+import { nameIssue } from '../game/names.js';
 import { loadSlowSetup, saveSlowSetup } from '../storage/slowSetup.js';
 import { HUMAN_NAMES } from '../game/slow/rules.js';
 import { colors } from '../theme/colors.js';
@@ -25,6 +26,8 @@ const WelcomeScreen = ({ nav }) => {
   const [cheer, setCheer] = useState({ mood: 'wave', key: 1 });
   const leaving = useRef(false);
   const cleaned = cleanName(name);
+  // Other players will see this name, so it is checked before it is accepted.
+  const issue = cleaned ? nameIssue(cleaned) : null;
 
   // Wave hello again after a moment, in case the first one was missed while
   // the screen was still settling.
@@ -91,14 +94,15 @@ const WelcomeScreen = ({ nav }) => {
             style={styles.input}
             accessibilityLabel="Your name"
           />
-          <Text style={styles.hint}>
-            On the leaderboard and to other players online. You can change it any
-            time in Settings.
+          <Text style={[styles.hint, issue && styles.hintBad]}>
+            {issue
+              ? 'That name is not allowed. Other players will see it, so pick another.'
+              : 'On the leaderboard and to other players online. You can change it any time in Settings.'}
           </Text>
 
           <Button
-            label={cleaned ? `Let's go, ${cleaned}` : "Let's go"}
-            disabled={!cleaned}
+            label={cleaned && !issue ? `Let's go, ${cleaned}` : "Let's go"}
+            disabled={!cleaned || !!issue}
             onPress={() => finish(cleaned)}
             style={styles.go}
           />
@@ -134,6 +138,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: space.md,
   },
+  hintBad: { color: colors.danger },
   hint: {
     fontFamily: fonts.body, fontSize: 12, color: colors.textFaint,
     textAlign: 'center', lineHeight: 17, marginBottom: space.sm,

@@ -22,6 +22,9 @@ export const DEFAULT_SETTINGS = {
   // Set once the welcome screen has been answered - named or skipped - so it is
   // asked exactly once, not every launch for someone who chose to stay anonymous.
   welcomed: false,
+  // Players this person has hidden, as { id, name }: left off the leaderboard
+  // and shown as "Hidden player" in online games. Kept on this device only.
+  hiddenPlayers: [],
 
   // Which cosmetics are equipped. Ownership lives on the profile; this is only
   // the choice, so it belongs here with the other device preferences - and it
@@ -125,6 +128,23 @@ export const cleanVolume = (raw, fallback = DEFAULT_SETTINGS.musicVolume) => {
   const value = Number(raw);
   if (raw === null || raw === '' || !Number.isFinite(value)) return fallback;
   return Math.round(Math.min(1, Math.max(0, value)) * 100) / 100;
+};
+
+export const HIDDEN_NAME = 'Hidden player';
+
+/** The ids someone has hidden, as a Set, whatever shape storage handed back. */
+export const hiddenIds = (settings) =>
+  new Set(
+    (Array.isArray(settings && settings.hiddenPlayers) ? settings.hiddenPlayers : [])
+      .map((entry) => entry && entry.id)
+      .filter(Boolean),
+  );
+
+/** Pure: the hidden list with one more player on it (no duplicates). */
+export const withHidden = (list, player) => {
+  const current = Array.isArray(list) ? list : [];
+  if (!player || !player.id || current.some((entry) => entry && entry.id === player.id)) return current;
+  return [...current, { id: player.id, name: String(player.name || '').slice(0, 40) }];
 };
 
 export const needsWelcome = (settings) =>

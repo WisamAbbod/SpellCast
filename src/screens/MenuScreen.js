@@ -78,6 +78,82 @@ const MenuScreen = ({ nav }) => {
   const asleep = idleMoodFor(new Date(now).getHours()) === 'sleepy' && now - wokenAt > STAY_AWAKE_MS;
   const donetoday = record?.status === 'complete';
 
+  const sprint = (
+    <ModeGroup
+      key="sprint"
+      title="Sprint"
+      blurb="60 seconds on your own, against the clock"
+      tint={colors.primary}
+      dim={colors.primaryDim}
+      edge={colors.primaryEdge}
+    >
+      {donetoday ? (
+        <View style={styles.pair}>
+          <Button
+            label="Daily complete"
+            subtitle={`Next in ${formatCountdown(msUntilNextPuzzle(now))}`}
+            variant="secondary"
+            onPress={() => nav.push('daily')}
+            style={styles.half}
+            fit
+          />
+          <Button
+            label="Practice"
+            variant="secondary"
+            icon="◈"
+            onPress={() => nav.push('practice')}
+            style={styles.half}
+            fit
+          />
+        </View>
+      ) : (
+        <>
+          <Button
+            label="Play daily"
+            subtitle={'One scored attempt · same board for everyone'}
+            icon="❖"
+            onPress={() => nav.push('daily')}
+          />
+          {/* The least at stake of the four, so the least room: one slim row,
+              which keeps the two lead buttons close together. */}
+          <Button
+            label="Practice"
+            variant="secondary"
+            icon="◈"
+            onPress={() => nav.push('practice')}
+            style={styles.slim}
+          />
+        </>
+      )}
+    </ModeGroup>
+  );
+
+  const turns = (
+    <ModeGroup
+      key="turns"
+      title="Turns"
+      blurb="Take turns against friends, strangers or bots"
+      tint={colors.accent}
+      dim={TURNS_DIM}
+      edge={TURNS_EDGE}
+    >
+      <Button
+        label="Play online"
+        subtitle="Live · share a code or find anyone"
+        variant="accent"
+        icon="◍"
+        onPress={() => nav.push('slowOnline')}
+      />
+      <Button
+        label="Offline mode"
+        subtitle="Pass one phone around · 2-6 players"
+        variant="secondary"
+        icon="◐"
+        onPress={() => nav.push('slowSetup')}
+      />
+    </ModeGroup>
+  );
+
   return (
     <Screen>
       {/* Scrolls only when it has to: on a tall phone the content fits and the
@@ -152,56 +228,11 @@ const MenuScreen = ({ nav }) => {
           {/* Two ways to play, and they are genuinely different games: a timed
               solo sprint, and a turn-based game against other players. Each
               gets its own panel, named and coloured to match its lead button,
-              so the split reads at a glance rather than as six similar rows. */}
-          <ModeGroup
-            title="Sprint"
-            blurb="60 seconds on your own, against the clock"
-            tint={colors.primary}
-            dim={colors.primaryDim}
-            edge={colors.primaryEdge}
-          >
-            <Button
-              label={donetoday ? 'Daily complete' : 'Play daily'}
-              subtitle={
-                donetoday
-                  ? `Next puzzle in ${formatCountdown(msUntilNextPuzzle(now))}`
-                  : 'One scored attempt \u00b7 same board for everyone'
-              }
-              icon="❖"
-              onPress={() => nav.push('daily')}
-            />
-            <Button
-              label="Practice"
-              subtitle="Unlimited rounds, nothing at stake"
-              variant="secondary"
-              icon="◈"
-              onPress={() => nav.push('practice')}
-            />
-          </ModeGroup>
-
-          <ModeGroup
-            title="Turns"
-            blurb="Take turns against friends, strangers or bots"
-            tint={colors.accent}
-            dim={TURNS_DIM}
-            edge={TURNS_EDGE}
-          >
-            <Button
-              label="Play online"
-              subtitle="Live · share a code or find anyone"
-              variant="accent"
-              icon="◍"
-              onPress={() => nav.push('slowOnline')}
-            />
-            <Button
-              label="Offline mode"
-              subtitle="Pass one phone around · 2-6 players"
-              variant="secondary"
-              icon="◐"
-              onPress={() => nav.push('slowSetup')}
-            />
-          </ModeGroup>
-
+              so the split reads at a glance rather than as six similar rows.
+              The daily leads until it has been played; after that it is a dead
+              end until tomorrow, so it folds down beside Practice and playing
+              online takes the top of the list. */}
+          {donetoday ? [turns, sprint] : [sprint, turns]}
         </View>
       </ScrollView>
 
@@ -284,6 +315,8 @@ const styles = StyleSheet.create({
   groupTitle: { fontFamily: fonts.displayBold, fontSize: 12, letterSpacing: 2.5 },
   groupBlurb: { flex: 1, fontFamily: fonts.body, fontSize: 11, color: colors.textDim },
   half: { flex: 1, paddingHorizontal: space.sm, minHeight: 48, paddingVertical: space.sm },
+  pair: { flexDirection: 'row', gap: space.sm },
+  slim: { minHeight: 48, paddingVertical: space.sm },
   // The scroll view reaches the screen's edges and puts the padding back
   // inside, so the wordmark can use the full width without being clipped.
   bleed: { marginHorizontal: -space.lg },

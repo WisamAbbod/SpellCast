@@ -16,7 +16,11 @@ export const COMBO_MAX = 2.5;
 
 /** Shuffles are free but rate-limited, so they can't be spammed for a better board. */
 export const SHUFFLE_COOLDOWN_MS = 12000;
-export const SHUFFLES_PER_ROUND = 3;
+// One, so it is a decision rather than a habit. (There were three, with the
+// cooldown below between them - and a greyed-out button showing "2" read as
+// "used up", not "wait twelve seconds". The cooldown only matters again if
+// this is ever raised.)
+export const SHUFFLES_PER_ROUND = 1;
 
 /** Bonus tiles, fixed for the whole round once seeded. */
 export const WORD_MULTIPLIER = 2;
